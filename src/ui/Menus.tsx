@@ -10,7 +10,7 @@ export function fmtTime(s: number) {
 }
 
 // ============================================================================
-// COMPONENTE 3D: RENDERIZA AL MONSTRUO ESCALADO Y CENTRADO EN EL MENÚ
+// COMPONENTE 3D: MONSTRUO VIVO EN EL MENÚ (Respiración, acecho y ojos pulsantes)
 // ============================================================================
 function ObserverMenu3D() {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -21,67 +21,93 @@ function ObserverMenu3D() {
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(40, container.clientWidth / container.clientHeight, 0.1, 50);
-    // Posicionamos la cámara para ver al monstruo de cuerpo casi entero
-    camera.position.set(0, 1.3, 4.2);
+    camera.position.set(0, 1.4, 4.5);
+    camera.lookAt(0.8, 1.2, 0);
 
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(renderer.domElement);
 
-    // Luces potentes para que resalten las texturas del modelo
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
+    // Luces dramáticas
+    const ambientLight = new THREE.AmbientLight(0x334455, 0.8);
     scene.add(ambientLight);
 
-    const keyLight = new THREE.DirectionalLight(0xffffff, 2.5);
-    keyLight.position.set(1, 3, 4);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.0);
+    keyLight.position.set(2, 4, 5);
     scene.add(keyLight);
 
-    const redRimLight = new THREE.PointLight(0xff2200, 4, 10);
-    redRimLight.position.set(2.5, 2.0, 1.5);
+    const redRimLight = new THREE.PointLight(0xff1100, 5, 12);
+    redRimLight.position.set(3, 2.5, 2);
     scene.add(redRimLight);
 
+    const blueFill = new THREE.PointLight(0x0066ff, 2, 10);
+    blueFill.position.set(-2, 2, 3);
+    scene.add(blueFill);
+
     let mixer: THREE.AnimationMixer | null = null;
+    let model: THREE.Group | null = null;
+    let pivot: THREE.Group | null = null;
+    const eyeMaterials: THREE.MeshStandardMaterial[] = [];
+
     const loader = new GLTFLoader();
 
     loader.load(
       '/models/monster.glb',
       (gltf) => {
-        const model = gltf.scene;
+        model = gltf.scene;
 
-        // --- AUTO-ESCALADO INTELIGENTE ---
-        // Calcula el tamaño real de la caja 3D del modelo
+        // Auto-escalado a 2.6m
         const box = new THREE.Box3().setFromObject(model);
         const size = box.getSize(new THREE.Vector3());
         const center = box.getCenter(new THREE.Vector3());
-
-        // Forzamos a que mida 2.5 metros de altura
-        const targetHeight = 2.5;
+        const targetHeight = 2.6;
         const scale = targetHeight / (size.y || 1);
         model.scale.setScalar(scale);
 
-        // Centramos el modelo en su base (pies en Y = 0)
+        // Centrar pies en el suelo
         box.setFromObject(model);
         box.getCenter(center);
         model.position.x = -center.x;
         model.position.y = -box.min.y;
         model.position.z = -center.z;
 
-        // Contenedor para ubicarlo a la derecha del menú
-        const pivot = new THREE.Group();
+        // Buscar materiales de ojos rojos para hacerlos pulsar
+        model.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            const mesh = child as THREE.Mesh;
+            mesh.castShadow = true;
+            const mat = mesh.material as THREE.MeshStandardMaterial;
+            if (mat && mat.emissive) {
+              const hex = mat.emissive.getHex();
+              if (hex === 0xff0000 || hex === 0xff1100 || hex === 0xcc0000) {
+                eyeMaterials.push(mat);
+              }
+            }
+          }
+        });
+
+        // Wrapper para poder girarlo 180° (que mire al frente) y animarlo
+        pivot = new THREE.Group();
         pivot.add(model);
-        pivot.position.set(1.35, -0.15, 0.2); // Posición a la derecha
-        pivot.rotation.y = -0.45; // Mirando hacia el centro
+        pivot.rotation.y = Math.PI; // Mirar hacia la cámara/jugador
+
+        // Posición a la derecha, ligeramente agachado (pose de acecho)
+        pivot.position.set(1.4, -0.1, 0.3);
+        pivot.rotation.z = 0.08; // Inclinación lateral sutil
+        pivot.rotation.x = 0.12; // Inclinación hacia adelante (agachado)
+
         scene.add(pivot);
 
-        // Reproducir animación si viene incluida
+        // Si el GLB tiene animaciones internas, las reproducimos
         if (gltf.animations.length > 0) {
           mixer = new THREE.AnimationMixer(model);
-          mixer.clipAction(gltf.animations[0]).play();
+          const action = mixer.clipAction(gltf.animations[0]);
+          action.play();
         }
       },
       undefined,
-      (err) => console.error('Error cargando /models/monster.glb:', err)
+      (err) => console.error('Error cargando modelo:', err)
     );
 
     let animId: number;
@@ -89,8 +115,36 @@ function ObserverMenu3D() {
 
     const animate = () => {
       animId = requestAnimationFrame(animate);
+      const t = clock.getElapsedTime();
       const dt = clock.getDelta();
+
       if (mixer) mixer.update(dt);
+
+      if (pivot && model) {
+        // 1. RESPIRACIÓN: escala sutil del cuerpo
+        const breath = Math.sin(t * 1.6) * 0.02;
+        pivot.scale.y = 1 + breath;
+        pivot.scale.x = 1 - breath * 0.5;
+        pivot.scale.z = 1 - breath * 0.5;
+
+        // 2. MOVIMIENTO DE CABEZA/ACECHO: gira lentamente como buscando
+        // Gira la cabeza (Y) de lado a lado lentamente
+        pivot.rotation.y = Math.PI + Math.sin(t * 0.4) * 0.25;
+        // Inclinación de cabeza (Z) sutil
+        pivot.rotation.z = 0.08 + Math.sin(t * 0.7) * 0.04;
+        // Inclinación hacia adelante/atrás (X) - como si estuviera agachado respirando
+        pivot.rotation.x = 0.12 + Math.sin(t * 0.5) * 0.03;
+
+        // 3. LEVANTARSE Y AGACHARSE: movimiento vertical sutil de acecho
+        const crouch = Math.sin(t * 0.3) * 0.05;
+        pivot.position.y = -0.1 + crouch;
+
+        // 4. OJOS PULSANTES ROJOS
+        eyeMaterials.forEach((mat) => {
+          mat.emissiveIntensity = 2.5 + Math.sin(t * 4) * 2 + Math.random() * 0.5;
+        });
+      }
+
       renderer.render(scene, camera);
     };
     animate();
