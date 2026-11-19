@@ -5,6 +5,12 @@ import { CELL } from './world';
 
 type State = 'dormant' | 'patrol' | 'watch' | 'investigate' | 'chase' | 'search' | 'attack';
 
+interface LimbNode {
+  obj: THREE.Object3D;
+  initRot: THREE.Euler;
+  initPos: THREE.Vector3;
+}
+
 export class Observer {
   group = new THREE.Group();
   state: State = 'dormant';
@@ -15,10 +21,13 @@ export class Observer {
   harmless = false;
 
   private model: THREE.Group | null = null;
-  private wrapper = new THREE.Group(); // Contenedor para giro y animación de caminata
+  private wrapper = new THREE.Group();
   private mixer: THREE.AnimationMixer | null = null;
-  private actions: { [key: string]: THREE.AnimationAction } = {};
-  private currentAction: THREE.AnimationAction | null = null;
+
+  // Huesos/extremidades para la caminata alternada
+  private frontLeftLimbs: LimbNode[] = [];
+  private frontRightLimbs: LimbNode[] = [];
+  private backLimbs: LimbNode[] = [];
 
   private timer = 0;
   private lastSeen = { x: 0, z: 0 };
@@ -38,14 +47,14 @@ export class Observer {
   private lightLevel = 0;
   private speedNow = 0;
   private spawnT = 0;
-  private stepPhase = 0;
-  private lastStep = 0;
+  private walkCycle = 0;
+  private lastStepIndex = 0;
 
   constructor(private g: Game) {
     const loader = new GLTFLoader();
 
-    // El wrapper gira 180° para que el bicho quede mirando de frente hacia el jugador
-    this.wrapper.rotation.y = Math.PI;
+    // El wrapper ahora apunta directo hacia el frente
+    this.wrapper.rotation.y = 0;
     this.group.add(this.wrapper);
 
     loader.load(
@@ -53,16 +62,16 @@ export class Observer {
       (gltf) => {
         this.model = gltf.scene;
 
-        // Auto-escalado a 2.7m de altura (tamaño imponente)
+        // Auto-escalado a 2.6 metros (altura de monstruo)
         const box = new THREE.Box3().setFromObject(this.model);
         const size = box.getSize(new THREE.Vector3());
         const center = box.getCenter(new THREE.Vector3());
 
-        const targetHeight = 2.7;
+        const targetHeight = 2.6;
         const scale = targetHeight / (size.y || 1);
         this.model.scale.setScalar(scale);
 
-        // Apoyar pies exactamente en el suelo
+        // Apoyar patas en el suelo (Y = 0)
         box.setFromObject(this.model);
         box.getCenter(center);
         this.model.position.x = -center.x;
@@ -73,20 +82,34 @@ export class Observer {
           if ((child as THREE.Mesh).isMesh) {
             child.castShadow = true;
           }
+
+          // Detección de extremidades delanteras y traseras
+          const name = child.name.toLowerCase();
+          const isBoneOrMesh = (child as THREE.Bone).isBone || child.type === 'Mesh' || child.type === 'Group';
+
+          if (isBoneOrMesh) {
+            const isLeft = name.includes('left') || name.includes('_l') || name.includes('.l') || name.startsWith('l_');
+            const isRight = name.includes('right') || name.includes('_r') || name.includes('.r') || name.startsWith('r_');
+            const isFront = name.includes('arm') || name.includes('front') || name.includes('hand') || name.includes('fore') || name.includes('shoulder');
+            const isBack = name.includes('leg') || name.includes('thigh') || name.includes('foot') || name.includes('hind') || name.includes('calf');
+
+            if (isLeft && isFront) {
+              this.frontLeftLimbs.push({ obj: child, initRot: child.rotation.clone(), initPos: child.position.clone() });
+            } else if (isRight && isFront) {
+              this.frontRightLimbs.push({ obj: child, initRot: child.rotation.clone(), initPos: child.position.clone() });
+            } else if (isBack) {
+              this.backLimbs.push({ obj: child, initRot: child.rotation.clone(), initPos: child.position.clone() });
+            }
+          }
         });
 
         this.wrapper.add(this.model);
 
-        // Si el archivo GLB incluye animaciones integradas
+        // Si el archivo incluye animación interna, reproducirla
         if (gltf.animations.length > 0) {
           this.mixer = new THREE.AnimationMixer(this.model);
-          gltf.animations.forEach((clip) => {
-            const name = clip.name.toLowerCase();
-            this.actions[name] = this.mixer!.clipAction(clip);
-          });
-          // Reproduce la primera animación por defecto
-          const firstAction = Object.values(this.actions)[0];
-          if (firstAction) firstAction.play();
+          const first = this.mixer.clipAction(gltf.animations[0]);
+          first.play();
         }
       },
       undefined,
@@ -95,18 +118,6 @@ export class Observer {
 
     this.group.visible = false;
     g.level.add(this.group);
-  }
-
-  private playAnim(name: string) {
-    if (!this.mixer) return;
-    const target = this.actions[name] || Object.values(this.actions)[0];
-    if (!target || target === this.currentAction) return;
-
-    if (this.currentAction) {
-      this.currentAction.fadeOut(0.3);
-    }
-    target.reset().fadeIn(0.3).play();
-    this.currentAction = target;
   }
 
   private canPass = (x: number, y: number) => {
@@ -148,7 +159,7 @@ export class Observer {
     this.state = 'chase'; this.chaseT = 0; this.lostT = 0; this.detect = 1;
     this.lastSeen = { x: this.g.P.x, z: this.g.P.z };
     this.g.audio.screech({ x: this.x, y: 2, z: this.z });
-    this.g.shake(0.4, 0.5);
+    this.g.shake(0.35, 0.5);
     this.g.onEnemyAlert();
   }
 
@@ -218,7 +229,7 @@ export class Observer {
       this.g.audio.doorSlide({ x: door.x, y: 1.5, z: door.z }, door.heavy);
     }
     const wantYaw = Math.atan2(-dx0, -dz0);
-    this.yaw = turn(this.yaw, wantYaw, (this.state === 'chase' ? 7 : 3.5) * dt);
+    this.yaw = turn(this.yaw, wantYaw, (this.state === 'chase' ? 6 : 3) * dt);
     this.speedNow = speed;
     const step = Math.min(speed * dt, dl);
     const p = { x: this.x + (dx0 / dl) * step, z: this.z + (dz0 / dl) * step };
@@ -257,14 +268,14 @@ export class Observer {
     if (this.detect >= 1 && !this.chasing && !(this.state === 'watch' && this.harmless)) this.startChase();
 
     // ========================================================================
-    // VELOCIDADES CALIBRADAS (Más lento y terrorífico)
+    // VELOCIDADES REDUCIDAS Y AMENAZANTES
     // ========================================================================
     switch (this.state) {
       case 'watch': {
         this.yaw = turn(this.yaw, Math.atan2(-dx, -dz), 2.5 * dt);
         this.watchT -= dt;
         const looking = g.lookDot(this.x, this.z) > 0.6 && this.hasLOS;
-        if (!looking && dist > 13 && !this.harmless) this.goto(P.x, P.z, 0.9, dt);
+        if (!looking && dist > 13 && !this.harmless) this.goto(P.x, P.z, 0.8, dt);
         if (this.harmless) {
           if ((dist < 11 && looking) || this.watchT < -6) { this.despawn(); return; }
         } else if (this.watchT <= 0 || dist < 9) {
@@ -278,8 +289,8 @@ export class Observer {
         break;
       }
       case 'patrol': {
-        // Velocidad de patrulla lenta (1.1 m/s)
-        const arrived = this.goto(this.target.x, this.target.z, 1.1, dt);
+        // Patrulla lenta y sigilosa (0.9 m/s)
+        const arrived = this.goto(this.target.x, this.target.z, 0.9, dt);
         if (arrived) {
           this.timer += dt; this.idleLook += dt;
           if (this.timer > 3 + Math.random()) this.pickWaypoint();
@@ -287,8 +298,8 @@ export class Observer {
         break;
       }
       case 'investigate': {
-        // Velocidad de acecho (1.6 m/s)
-        const arrived = this.goto(this.target.x, this.target.z, 1.6, dt);
+        // Acecho cauteloso (1.3 m/s)
+        const arrived = this.goto(this.target.x, this.target.z, 1.3, dt);
         if (arrived) {
           this.timer += dt;
           if (this.timer > 2.5) { this.state = 'search'; this.searchLeft = 9; this.sniffT = 0; }
@@ -301,8 +312,8 @@ export class Observer {
         else if (P.hidden || Math.hypot(this.lastSeen.x - this.x, this.lastSeen.z - this.z) < 1.6) this.lostT += dt;
         else this.lostT += dt * 0.15;
 
-        // VELOCIDAD DE PERSECUCIÓN AJUSTADA: Empieza en 2.8 y sube máximo a 3.4 m/s (puedes correr para escapar)
-        const sp = Math.min(3.4, 2.8 + this.chaseT * 0.03);
+        // VELOCIDAD DE PERSECUCIÓN AJUSTADA: Empieza en 2.1 y sube suavemente hasta máximo 2.5 m/s
+        const sp = Math.min(2.5, 2.1 + this.chaseT * 0.02);
 
         if (P.hidden) {
           if (g.hideSeen) {
@@ -337,7 +348,7 @@ export class Observer {
       }
       case 'search': {
         this.searchLeft -= dt;
-        const arrived = this.goto(this.target.x, this.target.z, 1.3, dt);
+        const arrived = this.goto(this.target.x, this.target.z, 1.1, dt);
         const nearHide = P.hidden && Math.hypot(P.hidden.x - this.x, P.hidden.z - this.z) < 3.2;
         if (nearHide) {
           this.sniffT += dt; g.nearHideTension = Math.min(1, this.sniffT / 4);
@@ -364,17 +375,18 @@ export class Observer {
     if (dist > 90 && this.state !== 'chase') { this.despawn(); return; }
 
     // ========================================================================
-    // ANIMACIÓN PROCEDURAL DE CAMINATA / ACECHO / ATAQUE
+    // ANIMACIÓN DE CAMINATA CON PISADA ALTERNADA EN LAS PATAS DE ADELANTE
     // ========================================================================
-    this.animateMotion(dt, time);
+    this.animateGait(dt, time);
 
-    // Sonidos de pasos pesados al avanzar
+    // Sonidos de pisadas pesadas sincronizadas con cada impacto de pata
     if (this.speedNow > 0.1) {
-      this.stepPhase += dt * this.speedNow * 2.5;
-      const cyc = Math.floor(this.stepPhase / Math.PI);
-      if (cyc !== this.lastStep) {
-        this.lastStep = cyc;
-        if (dist < 45) g.audio.heavyStep({ x: this.x, y: 0.1, z: this.z }, Math.min(0.8, 0.3 + this.speedNow * 0.1));
+      const stepIdx = Math.floor(this.walkCycle / Math.PI);
+      if (stepIdx !== this.lastStepIndex) {
+        this.lastStepIndex = stepIdx;
+        if (dist < 45) {
+          g.audio.heavyStep({ x: this.x, y: 0.1, z: this.z }, Math.min(0.7, 0.28 + this.speedNow * 0.08));
+        }
       }
     }
 
@@ -391,41 +403,84 @@ export class Observer {
     this.group.rotation.y = this.yaw;
   }
 
-  // Genera caminata viva con bamboleo de hombros, respiración y zancadas
-  private animateMotion(dt: number, time: number) {
+  // Genera el ciclo de marcha alternado: pata delantera izq -> pata delantera der
+  private animateGait(dt: number, time: number) {
     if (this.mixer) this.mixer.update(dt);
 
     const isMoving = this.speedNow > 0.1;
-    const isChasing = this.state === 'chase';
     const isAttacking = this.state === 'attack';
 
     if (isAttacking) {
-      // Embestida hacia adelante al golpear
-      const prog = Math.min(1, this.attackT / 0.4);
+      // Embestida frontal hacia adelante al atacar
+      const prog = Math.min(1, this.attackT / 0.35);
       const strike = Math.sin(prog * Math.PI);
       this.wrapper.position.z = strike * 0.45;
       this.wrapper.rotation.x = -strike * 0.25;
       this.wrapper.rotation.z = 0;
-    } else if (isMoving) {
-      // Marcha pesada: sube y baja al dar pasos y se balancea de izquierda a derecha
-      const stepSpeed = isChasing ? 6.2 : 4.2;
-      const stepCycle = time * stepSpeed;
+      return;
+    }
 
-      const bobY = Math.abs(Math.sin(stepCycle)) * (isChasing ? 0.08 : 0.045);
-      const swayZ = Math.sin(stepCycle) * (isChasing ? 0.09 : 0.05);
-      const leanX = isChasing ? 0.18 : 0.06; // Se inclina hacia adelante al correr
+    if (isMoving) {
+      // Velocidad del ritmo de paso
+      const strideRate = this.chasing ? 4.5 : 3.2;
+      this.walkCycle += dt * strideRate;
 
-      this.wrapper.position.y = -bobY;
+      const p = this.walkCycle;
+
+      // 1. Pata delantera izquierda: fase P
+      // 2. Pata delantera derecha: fase P + PI (180° opuesta: una pisa mientras la otra avanza)
+      const strideL = Math.sin(p);
+      const strideR = Math.sin(p + Math.PI);
+
+      // Movimiento directo en las extremidades detectadas
+      this.frontLeftLimbs.forEach((l) => {
+        l.obj.rotation.x = l.initRot.x + strideL * 0.45;
+        l.obj.position.y = l.initPos.y + Math.max(0, strideL) * 0.12;
+      });
+
+      this.frontRightLimbs.forEach((r) => {
+        r.obj.rotation.x = r.initRot.x + strideR * 0.45;
+        r.obj.position.y = r.initPos.y + Math.max(0, strideR) * 0.12;
+      });
+
+      // Patas traseras en paso cruzado
+      this.backLimbs.forEach((b, idx) => {
+        const offset = idx % 2 === 0 ? Math.PI * 0.5 : Math.PI * 1.5;
+        b.obj.rotation.x = b.initRot.x + Math.sin(p + offset) * 0.35;
+      });
+
+      // Dinámica del torso:
+      // - Cada vez que una pata delantera pisa, el cuerpo baja (impacto)
+      // - El peso se traslada de izquierda a derecha (roll & yaw)
+      const dipY = Math.abs(Math.sin(p)) * 0.055;
+      const swayZ = Math.sin(p) * 0.065;
+      const yawTwist = Math.cos(p) * 0.055;
+
+      this.wrapper.position.y = -dipY;
       this.wrapper.position.z = 0;
       this.wrapper.rotation.z = swayZ;
-      this.wrapper.rotation.x = leanX;
+      this.wrapper.rotation.y = yawTwist;
+      this.wrapper.rotation.x = this.chasing ? 0.15 : 0.06; // Inclinación agresiva
     } else {
-      // Respiración siniestra y suave cuando está quieto
-      const breath = Math.sin(time * 1.8) * 0.02;
+      // Estado de reposo / acecho: respiración pesada
+      const breath = Math.sin(time * 1.6) * 0.02;
       this.wrapper.position.y = breath;
       this.wrapper.position.z = 0;
-      this.wrapper.rotation.z = Math.sin(time * 0.9) * 0.02;
-      this.wrapper.rotation.x = Math.sin(time * 1.3) * 0.02;
+      this.wrapper.rotation.z = Math.sin(time * 0.8) * 0.015;
+      this.wrapper.rotation.x = Math.sin(time * 1.1) * 0.02;
+
+      // Regresar extremidades a la posición base suavemente
+      this.frontLeftLimbs.forEach((l) => {
+        l.obj.rotation.x = l.initRot.x;
+        l.obj.position.y = l.initPos.y;
+      });
+      this.frontRightLimbs.forEach((r) => {
+        r.obj.rotation.x = r.initRot.x;
+        r.obj.position.y = r.initPos.y;
+      });
+      this.backLimbs.forEach((b) => {
+        b.obj.rotation.x = b.initRot.x;
+      });
     }
   }
 }
