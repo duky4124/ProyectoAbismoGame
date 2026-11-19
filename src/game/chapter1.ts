@@ -61,6 +61,7 @@ export function buildChapter1(g: Game): ChapterRuntime {
     else W.prop(k).cyl(x0, y, (z0 + z1) / 2, r, Math.abs(z1 - z0), 8, 0, Math.PI / 2);
   };
   const cableHang = (x: number, z: number, h = 1.2) => W.prop('black').cyl(x, WALL_H - h / 2, z, 0.025, h, 5);
+
   const shelf = (x: number, z: number, len: number, alongX = true, items = true) => {
     const sx = alongX ? len : 0.6, sz = alongX ? 0.6 : len;
     for (let i = 0; i < 4; i++) W.prop('steel').box(x, 0.2 + i * 0.6, z, sx, 0.05, sz);
@@ -69,13 +70,98 @@ export function buildChapter1(g: Game): ChapterRuntime {
     if (items) for (let i = 0; i < 4; i++) for (let k = 0; k < Math.floor(len / 0.8); k++) if (R() < 0.7) { const t = (k + 0.5) * 0.8 - len / 2; const s = 0.25 + R() * 0.25; W.prop(R() < 0.6 ? 'crate' : R() < 0.5 ? 'white' : 'dark').box(alongX ? x + t : x, 0.225 + i * 0.6 + s / 2, alongX ? z : z + t, s * 1.2, s, s, R() * 0.4); }
     W.addCollider({ x0: x - sx / 2, x1: x + sx / 2, z0: z - sz / 2, z1: z + sz / 2 });
   };
+
+  // ======================= NUEVA TAQUILLA HUECA CON MIRILLA FUNCIONAL =======================
   const locker = (x: number, z: number, face: 'n' | 's' | 'e' | 'w', hideId?: string) => {
-    const f = FACE[face]; const along = f.dx === 0;
-    W.boxProp('lockerblue', x, 1.0, z, along ? 0.9 : 0.6, 2.0, along ? 0.6 : 0.9);
-    W.prop('dark').box(x + f.dx * 0.31, 1.0, z + f.dz * 0.31, along ? 0.82 : 0.03, 1.9, along ? 0.03 : 0.82);
-    for (let i = 0; i < 4; i++) W.prop('black').box(x + f.dx * 0.325, 1.6 + i * 0.07, z + f.dz * 0.325, along ? 0.4 : 0.02, 0.025, along ? 0.02 : 0.4);
-    if (hideId) g.addHide({ id: hideId, x, z, yaw: f.yaw, eye: 1.55, type: 'locker', exit: { x: x + f.dx * 1.15, z: z + f.dz * 1.15 } }, 'Esconderte en el armario');
+    const f = FACE[face];
+    const along = f.dx === 0;
+
+    // Pared trasera
+    W.prop('lockerblue').box(
+      x - f.dx * 0.27, 1.0, z - f.dz * 0.27,
+      along ? 0.86 : 0.04, 2.0, along ? 0.04 : 0.86
+    );
+
+    // Techo y suelo
+    W.prop('lockerblue').box(x, 1.98, z, along ? 0.86 : 0.58, 0.04, along ? 0.58 : 0.86);
+    W.prop('lockerblue').box(x, 0.02, z, along ? 0.86 : 0.58, 0.04, along ? 0.58 : 0.86);
+
+    // Laterales izquierdo y derecho
+    if (along) {
+      W.prop('lockerblue').box(x - 0.41, 1.0, z, 0.04, 2.0, 0.58);
+      W.prop('lockerblue').box(x + 0.41, 1.0, z, 0.04, 2.0, 0.58);
+    } else {
+      W.prop('lockerblue').box(x, 1.0, z - 0.41, 0.58, 2.0, 0.04);
+      W.prop('lockerblue').box(x, 1.0, z + 0.41, 0.58, 2.0, 0.04);
+    }
+
+    // Puerta frontal con apertura para espiar
+    const doorX = x + f.dx * 0.28;
+    const doorZ = z + f.dz * 0.28;
+
+    // Parte inferior de la puerta (hasta 1.35m)
+    W.prop('lockerblue').box(
+      doorX, 0.675, doorZ,
+      along ? 0.82 : 0.03, 1.35, along ? 0.03 : 0.82
+    );
+
+    // Parte superior de la puerta (de 1.72m a 2.0m)
+    W.prop('lockerblue').box(
+      doorX, 1.86, doorZ,
+      along ? 0.82 : 0.03, 0.28, along ? 0.03 : 0.82
+    );
+
+    // Bordes laterales de la rejilla
+    if (along) {
+      W.prop('lockerblue').box(doorX - 0.28, 1.535, doorZ, 0.26, 0.37, 0.03);
+      W.prop('lockerblue').box(doorX + 0.28, 1.535, doorZ, 0.26, 0.37, 0.03);
+    } else {
+      W.prop('lockerblue').box(doorX, 1.535, doorZ - 0.28, 0.03, 0.37, 0.26);
+      W.prop('lockerblue').box(doorX, 1.535, doorZ + 0.28, 0.03, 0.37, 0.26);
+    }
+
+    // Lamas / rejillas horizontales con hueco real para mirar entre ellas
+    const slats = [1.38, 1.46, 1.54, 1.62, 1.70];
+    for (const sy of slats) {
+      W.prop('dark').box(
+        doorX, sy, doorZ,
+        along ? 0.34 : 0.035, 0.02, along ? 0.035 : 0.34
+      );
+    }
+
+    // Manija metálica
+    W.prop('steel').box(
+      doorX + (along ? 0.32 : f.dx * 0.02),
+      1.1,
+      doorZ + (along ? f.dz * 0.02 : 0.32),
+      along ? 0.03 : 0.06, 0.14, along ? 0.06 : 0.03
+    );
+
+    // Colisión física para no atravesar la taquilla caminando
+    W.addCollider({
+      x0: x - (along ? 0.43 : 0.29),
+      x1: x + (along ? 0.43 : 0.29),
+      z0: z - (along ? 0.29 : 0.43),
+      z1: z + (along ? 0.29 : 0.43),
+    });
+
+    // Escondite: coloca la cámara justo detrás de las rendijas mirando hacia afuera
+    if (hideId) {
+      g.addHide(
+        {
+          id: hideId,
+          x: x - f.dx * 0.06,
+          z: z - f.dz * 0.06,
+          yaw: f.yaw,
+          eye: 1.50, // justo en el espacio entre lamas para ver el pasillo
+          type: 'locker',
+          exit: { x: x + f.dx * 1.15, z: z + f.dz * 1.15 },
+        },
+        'Esconderte en el armario'
+      );
+    }
   };
+
   const desk = (x: number, z: number, ry = 0, hideId?: string, face: 'n' | 's' | 'e' | 'w' = 's') => {
     const a = Math.abs(Math.cos(ry)) > 0.5;
     const sx = a ? 1.6 : 0.8, sz = a ? 0.8 : 1.6;
@@ -85,6 +171,7 @@ export function buildChapter1(g: Game): ChapterRuntime {
     W.addCollider({ x0: x - sx / 2, x1: x + sx / 2, z0: z - sz / 2, z1: z + sz / 2 });
     if (hideId) { const f = FACE[face]; g.addHide({ id: hideId, x, z, yaw: f.yaw, eye: 0.52, type: 'desk', exit: { x: x + f.dx * 1.3, z: z + f.dz * 1.3 } }, 'Esconderte debajo de la mesa'); }
   };
+
   const monitor = (x: number, y: number, z: number, ry = 0, k = 'screen') => { W.prop('dark').box(x, y + 0.14, z, 0.44, 0.3, 0.05, ry); W.prop(k).box(x - Math.sin(ry) * -0.03, y + 0.14, z + Math.cos(ry) * -0.03 * -1, 0.38, 0.24, 0.02, ry); };
   const chair = (x: number, z: number, ry = 0) => { W.boxProp('dark', x, 0.45, z, 0.5, 0.06, 0.5, true, ry); W.prop('dark').box(x + Math.sin(ry) * 0.24, 0.8, z + Math.cos(ry) * 0.24, 0.5, 0.7, 0.06, ry); W.prop('steel').cyl(x, 0.22, z, 0.04, 0.44, 5); };
   const terminal = (x: number, z: number, face: 'n' | 's' | 'e' | 'w', k = 'screen') => {
@@ -144,7 +231,7 @@ export function buildChapter1(g: Game): ChapterRuntime {
   crate(6.5, 28, 1.0); crate(7.6, 28.2, 1.2); crate(6.9, 28.1, 1.0, 1.2, 0.4, false);
   crate(30, 46, 1.1); crate(31.3, 46, 1.0); crate(30.5, 46.1, 1.0, 1.1, 0.2, false);
   W.boxProp('crate', 24, 1.1, 51.4, 1.4, 2.2, 1.4, true, 0.1); W.boxProp('crate', 26.2, 1.1, 51.4, 1.4, 2.2, 1.4, true, -0.1); W.boxProp('crate', 25, 0.55, 53.1, 1.4, 1.1, 1.4, true);
-  
+
   // carretilla y generador
   W.boxProp('yellow', 30.5, 0.7, 53, 2.2, 1.0, 1.3); W.prop('dark').box(30, 1.5, 53, 1.1, 0.9, 1.2); W.prop('steel').box(32.1, 1.4, 53, 0.1, 2.4, 1.1);
   W.boxProp('steel', 37.2, 0.8, 51, 1.2, 1.6, 2.6); W.prop('screen').box(36.58, 1.2, 51, 0.02, 0.4, 0.8); W.prop('red').box(37.2, 1.65, 50.4, 0.8, 0.12, 0.3);
@@ -163,7 +250,7 @@ export function buildChapter1(g: Game): ChapterRuntime {
   signAt(['MANTENIMIENTO', 'CONDUCTO 4B'], '#222', '#9ad', 39.95, 1.2, 55.0, -Math.PI / 2, 1.4, 0.6);
   W.prop('dark').box(40.1, 2.5, 53, 0.3, 2.2, 2.0); W.prop('dark').box(47.9, 2.5, 67, 0.3, 2.2, 2.0);
 
-  // Escondites del hangar (ajustados para no chocar con la pared)
+  // Escondites del hangar
   locker(5.0, 52, 'e', 'h_lock1');
   W.boxProp('crate', 18, 1.1, 51.6, 1.5, 2.2, 1.2, true); W.boxProp('crate', 19.6, 1.1, 51.6, 1.5, 2.2, 1.2, true);
   g.addHide({ id: 'h_crate1', x: 18.8, z: 52.8, yaw: 0, eye: 0.85, type: 'crate', exit: { x: 18.8, z: 49.8 } }, 'Esconderte detrás de las cajas');
@@ -176,16 +263,16 @@ export function buildChapter1(g: Game): ChapterRuntime {
   redLight(4, 14); redLight(17, 14); redLight(4, 25); redLight(17, 25); redLight(10, 19.5);
   tube(7, 16, 'flicker'); tube(13, 16, 'dead'); tube(7, 23, 'dim'); tube(14, 23, 'flicker'); tube(11, 19.5, 'dead', true);
 
-  // ---- OBJETOS DEL HANGAR (Alturas corregidas) ----
+  // ---- OBJETOS DEL HANGAR ----
   g.addPickup({ id: 'p_pipe', item: 'pipe', x: 16.8, z: 34.8, y: 0.08 });
   g.addPickup({ id: 'p_tape', item: 'tape', x: 22.6, z: 25.2, y: 0.95, label: 'Coger cinta americana' });
   g.addPickup({ id: 'p_can1', item: 'can', x: 35.2, z: 29.4, y: 0.08 });
-  g.addPickup({ id: 'p_wire1', item: 'wire', x: 5.2, z: 45, y: 0.08, label: 'Coger cable pelado' }); // CORREGIDO: estaba flotando a 0.9
+  g.addPickup({ id: 'p_wire1', item: 'wire', x: 5.2, z: 45, y: 0.08, label: 'Coger cable pelado' });
   g.addPickup({ id: 'p_water1', item: 'water', x: 23.2, z: 50, y: 0.08 });
   g.addPickup({ id: 'p_bat1', item: 'battery', x: 36.4, z: 47.4, y: 0.08 });
   g.addPickup({ id: 'p_band1', item: 'bandage', x: 7.2, z: 26.4, y: 0.08 });
-  g.addPickup({ id: 'p_alc1', item: 'alcohol', x: 10, z: 24.8, y: 0.85 }); // CORREGIDO: apoyado en estante
-  g.addPickup({ id: 'p_ration1', item: 'ration', x: 17, z: 24.8, y: 0.85 }); // CORREGIDO: apoyado en estante
+  g.addPickup({ id: 'p_alc1', item: 'alcohol', x: 10, z: 24.8, y: 0.85 });
+  g.addPickup({ id: 'p_ration1', item: 'ration', x: 17, z: 24.8, y: 0.85 });
   g.addDocPickup({ id: 'dp_manifest', doc: 'd_manifest', x: 10.6, z: 38.6, y: 0.95 });
 
   // cabina del vehículo
@@ -296,9 +383,8 @@ export function buildChapter1(g: Game): ChapterRuntime {
   blood(58, 9, 1.8);
   tube(52, 8, 'flicker'); tube(60, 8, 'dead'); tube(56, 12, 'dim');
 
-  // --- Cubículos B (ROTACIÓN DE ESCONDITE CORREGIDA) ---
+  // --- Cubículos B ---
   for (let i = 0; i < 3; i++) { desk(89 + i * 3.4, 6, Math.PI / 2); W.boxProp('white', 90.8 + i * 3.4, 0.8, 8, 0.1, 1.6, 3.0); chair(88.3 + i * 3.4, 6, 1.6); monitor(89.3 + i * 3.4, 0.78, 6.4, 0, i === 1 ? 'screen2' : 'screen'); }
-  // CORREGIDO: face: 'n' para que mire a la habitación y no al muro
   desk(93, 10.5, 0, 'h_desk_b', 'n'); chair(93, 11.8, 0);
   g.addDocPickup({ id: 'dp_calendar', doc: 'd_calendar', x: 92.8, z: 10.4, y: 0.82 });
   g.addDocPickup({ id: 'dp_audio1', doc: 'd_audio1', x: 92.0, z: 6.4, y: 0.82, label: 'Escuchar grabadora' });
@@ -313,7 +399,6 @@ export function buildChapter1(g: Game): ChapterRuntime {
   desk(75, 6.5, 0, 'h_desk_seg', 's'); chair(75, 8.2, 3.14); monitor(75.5, 0.78, 6.4, 0, 'screen2'); monitor(74.4, 0.78, 6.4, 0);
   for (let i = 0; i < 4; i++) { W.boxProp('dark', 69.2, 0.6, 5 + i * 1.7, 0.5, 1.2, 1.4); W.prop('screen').box(69.47, 1.0, 5 + i * 1.7, 0.02, 0.4, 0.9); }
   W.boxProp('steel', 81, 1.0, 6, 0.9, 2.0, 2.4); W.prop('red').box(80.54, 1.0, 6, 0.02, 1.8, 2.2);
-  // CORREGIDO: separación del armario de la esquina
   locker(79.8, 11.2, 'w', 'h_lock_seg'); locker(79.8, 9.8, 'w');
   g.addPickup({ id: 'p_keycard', item: 'keycard_blue', x: 76.2, z: 6.6, y: 0.82, score: 400 });
   g.addDocPickup({ id: 'dp_incident', doc: 'd_incident', x: 73.6, z: 6.6, y: 0.82 });
@@ -322,7 +407,7 @@ export function buildChapter1(g: Game): ChapterRuntime {
   blood(72, 9, 2.0, undefined); blood(80, 7, 1.4);
   tube(72, 7, 'steady'); tube(77, 11, 'flicker'); redLight(36, 5);
 
-  // ======================= ALMACÉN B (OBJETOS EN ESTANTES CORREGIDOS) =======================
+  // ======================= ALMACÉN B =======================
   g.makeDoor({ id: 'ds', cx: 34, cy: 27, kind: 'office', heavy: false });
   for (const sx of [53, 63, 74, 82]) for (const sz of [62, 68]) if (!(sx === 63 && sz === 68)) shelf(sx, sz, 7, true, true);
   crate(50, 60, 1.2); crate(51.3, 60, 1.0); crate(50.4, 60, 1.0, 1.0, 0.4, false);
@@ -330,7 +415,6 @@ export function buildChapter1(g: Game): ChapterRuntime {
   barrel(86.6, 68.6, 'red'); barrel(85.8, 69.4); barrel(86.8, 70.2, 'rust');
   W.boxProp('yellow', 56, 0.35, 71.6, 2.4, 0.7, 1.0); W.boxProp('crate', 58.8, 0.5, 71.4, 1.4, 1.0, 1.0); W.boxProp('crate', 60.4, 0.5, 71.5, 1.1, 1.0, 1.1);
   
-  // CORREGIDO: escondite en cajas de almacén no choca con el muro sur
   g.addHide({ id: 'h_crate_alm', x: 84.5, z: 70.8, yaw: Math.PI / 2, eye: 0.85, type: 'crate', exit: { x: 82.5, z: 69.5 } }, 'Esconderte detrás de los barriles');
   W.boxProp('crate', 83.6, 1.0, 71.8, 1.3, 2.0, 1.3); W.boxProp('crate', 83.6, 1.0, 70.2, 1.3, 2.0, 1.3);
   locker(49, 66, 'e', 'h_lock_alm');
@@ -343,7 +427,6 @@ export function buildChapter1(g: Game): ChapterRuntime {
   signAt(['ELLOS ESTÁN', 'DETRÁS DE LA PARED'], '#14110f', '#b22', 65, 1.7, 71.95, Math.PI, 2.2, 1.0);
   blood(65, 71.93, 1.8, { y: 1.1, ry: Math.PI });
 
-  // CORREGIDOS: Todos los items de estanterías nivelados a 0.85m o 0.08m
   g.addPickup({ id: 'p_fuse', item: 'fuse_burnt', x: 53, z: 62, y: 0.85, label: 'Coger fusible quemado' });
   g.addPickup({ id: 'p_wire3', item: 'wire', x: 63, z: 61.8, y: 0.85 });
   g.addPickup({ id: 'p_can3', item: 'can', x: 74, z: 62.2, y: 0.85 });
@@ -413,8 +496,7 @@ export function buildChapter1(g: Game): ChapterRuntime {
   terminal(112.4, 36.2, 'w', 'screen2'); W.prop('yellow').box(112.4, 0.1, 36.2, 1.0, 0.1, 1.0);
   locker(96.6, 31, 'e', 'h_lock_ex'); locker(96.6, 32.4, 'e');
   W.boxProp('crate', 109, 1.0, 46.2, 1.4, 2.0, 1.3, true); W.boxProp('crate', 110.6, 0.55, 46.2, 1.4, 1.1, 1.3, true); W.boxProp('crate', 99.5, 0.5, 46.3, 1.0, 1.0, 1.0);
-  
-  // CORREGIDO: escondite en cajas de esclusa
+
   g.addHide({ id: 'h_crate_ex', x: 110, z: 46.2, yaw: 0, eye: 0.85, type: 'crate', exit: { x: 110, z: 43.8 } }, 'Esconderte detrás de las cajas');
   terminal(97.4, 44, 'e', 'screen2');
   g.addInteract({ id: 'save_ex', x: 97.4, y: 1.1, z: 44, reach: 2.5, label: () => 'Terminal — Guardar partida', use: () => saveTerm('Esclusa 3') });
@@ -531,4 +613,51 @@ export function buildChapter1(g: Game): ChapterRuntime {
   const onPickup = (item: string) => {
     if (item === 'keycard_blue' && !g.flag('keycard_event')) {
       g.setFlag('keycard_event');
-      g.shake(0.7, 
+      g.shake(0.7, 1.2); audio.powerOff(); g.alarm(true); audio.rumble();
+      g.say('LENA', '¡Dan! ¡Ha saltado la alarma de contención! ¡Algo se ha liberado, sal de ahí ya!', true);
+      g.say('DAN', 'Genial… Tengo que esconderme o salir sin que me vea.');
+      g.hint('hideflee', 'Escóndete (E) en armarios o bajo mesas ANTES de que te vea entrar. Si ves que patrulla, no hagas ruido.', true);
+      g.after(7, () => { if (!g.enemy.active) { const sp = g.pickSpawn(24, 70, false); g.spawnEnemy('chase', sp ? { at: sp } : { minD: 16, maxD: 120, los: null }); } });
+      g.directorGap = [30, 55];
+    }
+    if (item === 'pipe' || item === 'tape') { if (g.has('pipe') && g.has('tape')) g.hint('craftA', 'Tienes tubo y cinta. Abre la mochila (Tab) y fabrica una palanca.', true); }
+    if (item === 'fuse_burnt') g.say('DAN', 'Un fusible quemado. Si lo puenteo con cable de cobre…');
+    if (item === 'can' || item === 'wire') { if (g.has('can') && g.has('wire')) g.hint('craftB', 'Lata + cable = distractor sonoro (G para lanzar). Atrae a las criaturas.'); }
+  };
+
+  const onCraft = (item: string) => { if (item === 'fuse') g.say('DAN', 'Listo. Ahora hay que llevárselo a la caja de la esclusa.'); };
+  const onDoc = (id: string) => {
+    if (id === 'd_secret') g.say('DAN', '…Daniel Ortega. Ese soy yo. No… no puede ser.');
+    if (id === 'd_manifest') g.hint('doc', 'Todos los documentos quedan guardados en la mochila → pestaña Archivo.');
+  };
+
+  const tickEnding = (dt: number) => {
+    if (g.flag('lift_called') && !g.flag('lift_open')) {
+      liftT -= dt;
+      if (liftT <= 0) {
+        g.setFlag('lift_open'); g.unlockDoor(lift, true); audio.ding(); g.alarm(false);
+        g.toast('El ascensor ha llegado. ¡Corre!', 'good'); g.say('LENA', '¡Ya está abierto! ¡Entra, Dan, entra!', true);
+      }
+    }
+  };
+
+  return {
+    start: {
+      x: 11, z: 41, yaw: 0,
+      run: (fromSave) => {
+        if (g.flag('power')) { g.powerOn = true; }
+        if (g.flag('atrio')) { g.directorOn = true; g.directorGap = g.flag('keycard_event') ? [30, 55] : [40, 80]; }
+        if (fromSave) { g.toast('Partida cargada', 'info'); return; }
+        g.fadeSpeed = 0.5; g.alarm(true); audio.crash(); g.shake(1, 1.2);
+        g.after(24, () => { if (!g.flag('keycard_event')) g.alarm(false); });
+        g.after(1.2, () => { g.say('LENA', 'Dan… ¿me recibes? Perdimos tu telemetría. Dan, contesta.', true); });
+        g.after(5.5, () => g.say('DAN', 'Ugh… la cabeza… El vehículo… ¿dónde estoy?'));
+        g.after(9, () => { g.say('LENA', 'Tu transpondedor te sitúa en el hangar siete, a ocho mil metros. Busca luz y sal de ahí.', true); });
+        g.after(3, () => g.hint('wasd', 'WASD para moverte · ratón para mirar · busca algo de luz', true));
+        g.after(12, () => { g.shake(0.8, 1.0); audio.rumble(); g.dustBurst(40);});
+      },
+    },
+    update: tickEnding,
+    onPickup, onDoc, onCraft,
+  };
+}
