@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { CHAPTERS, DEFAULT_SETTINGS, loadProgress, loadScores, type Settings } from '../game/data';
 import { audio } from '../game/audio';
 
@@ -9,7 +10,7 @@ export function fmtTime(s: number) {
 }
 
 // ============================================================================
-// COMPONENTE 3D: OBSERVER MIRANDO AL FRENTE CON CARA Y OJOS ILUMINADOS
+// COMPONENTE 3D: RENDERIZA TU MODELO GLB EN EL MENÚ
 // ============================================================================
 function ObserverMenu3D() {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -18,295 +19,64 @@ function ObserverMenu3D() {
     const container = mountRef.current;
     if (!container) return;
 
-    // 1. Escena y Cámara
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(40, container.clientWidth / container.clientHeight, 0.1, 50);
-    camera.position.set(0, 1.7, 4.2);
+    camera.position.set(0, 1.4, 4.2);
 
-    // 2. Renderer transparente
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(renderer.domElement);
 
-    // 3. Iluminación frontal enfocada en el rostro y tórax
-    const ambientLight = new THREE.AmbientLight(0x0e1317, 1.5);
+    // Luces para que el modelo se integre con la niebla roja/azul del fondo
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
 
-    // Luz fría frontal para resaltar los rasgos faciales cadavéricos y dientes
-    const faceLight = new THREE.DirectionalLight(0xd8e6ec, 2.2);
-    faceLight.position.set(0.5, 3.5, 4.0);
-    scene.add(faceLight);
+    const keyLight = new THREE.DirectionalLight(0xddeeff, 1.4);
+    keyLight.position.set(-1, 3, 4);
+    scene.add(keyLight);
 
-    // Luz roja siniestra lateral/inferior
-    const redGlow = new THREE.PointLight(0xff1800, 3.5, 7);
-    redGlow.position.set(1.6, 2.2, 1.5);
-    scene.add(redGlow);
+    const redRimLight = new THREE.PointLight(0xff1500, 3.5, 8);
+    redRimLight.position.set(2, 2.5, 1.5);
+    scene.add(redRimLight);
 
-    // ========================================================================
-    // CONSTRUCCIÓN DEL BICHO
-    // ========================================================================
-    const group = new THREE.Group();
-    const body = new THREE.Group();
-    const head = new THREE.Group();
-    const legs: { hip: THREE.Group; knee: THREE.Group }[] = [];
-    const arms: { sh: THREE.Group; el: THREE.Group }[] = [];
-    const eyes: THREE.Mesh[] = [];
+    let mixer: THREE.AnimationMixer | null = null;
+    const loader = new GLTFLoader();
 
-    const skinMat = new THREE.MeshStandardMaterial({
-      color: 0xedeae2,
-      roughness: 0.38,
-      metalness: 0.05,
-      emissive: 0x1f1d1a,
-    });
-    const boneMat = new THREE.MeshStandardMaterial({
-      color: 0xf5f3ee,
-      roughness: 0.25,
-      metalness: 0.1,
-    });
-    const voidDark = new THREE.MeshBasicMaterial({ color: 0x010101 });
-    const fleshMat = new THREE.MeshStandardMaterial({ color: 0x3d1a24, roughness: 0.45, emissive: 0x140408 });
-    const clawMat = new THREE.MeshStandardMaterial({ color: 0x111113, roughness: 0.15, metalness: 0.4 });
-    const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    loader.load(
+      '/models/monster.glb',
+      (gltf) => {
+        const model = gltf.scene;
 
-    const createAnatomicalBone = (len: number, rTop: number, rBot: number) => {
-      const grp = new THREE.Group();
-      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(rBot, rTop, len, 8), skinMat);
-      shaft.position.y = -len / 2;
-      grp.add(shaft);
-      const joint = new THREE.Mesh(new THREE.SphereGeometry(rTop * 1.12, 6, 6), boneMat);
-      joint.position.y = -0.02;
-      grp.add(joint);
-      return grp;
-    };
+        // Posición a la derecha de la pantalla y orientado hacia el centro
+        model.position.set(1.3, -0.9, 0.2);
+        model.rotation.y = -0.4;
+        model.scale.setScalar(1.6); // Si queda muy grande o chico, ajusta este número
 
-    group.add(body);
+        scene.add(model);
 
-    // Pelvis
-    const pelvis = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.12, 0.24, 7), skinMat);
-    pelvis.position.y = 1.48;
-    pelvis.scale.set(1.1, 1, 0.7);
-    body.add(pelvis);
-
-    // Columna
-    const lowerSpine = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.08, 0.42, 6), boneMat);
-    lowerSpine.position.set(0, 1.72, 0.02);
-    body.add(lowerSpine);
-
-    // Tórax
-    const chest = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.14, 0.85, 9), skinMat);
-    chest.scale.set(1.1, 1.0, 0.62);
-    chest.position.set(0, 2.15, -0.02);
-    body.add(chest);
-
-    // Esternón
-    const sternum = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.45, 0.03), boneMat);
-    sternum.position.set(0, 2.2, -0.16);
-    body.add(sternum);
-
-    // Costillas
-    for (let i = 0; i < 8; i++) {
-      const ribW = 0.19 - i * 0.008;
-      const rib = new THREE.Mesh(new THREE.TorusGeometry(ribW, 0.012, 5, 14, Math.PI * 0.95), boneMat);
-      rib.rotation.set(Math.PI / 2 + 0.1, 0, Math.PI / 2);
-      rib.scale.set(1, 0.65, 1);
-      rib.position.set(0, 1.82 + i * 0.075, -0.01);
-      body.add(rib);
-    }
-
-    // Vértebras traseras
-    for (let i = 0; i < 9; i++) {
-      const vert = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.16, 4), boneMat);
-      vert.rotation.x = Math.PI / 2 + 0.25;
-      vert.position.set(0, 1.62 + i * 0.11, 0.12 + Math.sin(i * 0.3) * 0.02);
-      body.add(vert);
-    }
-
-    // Clavículas
-    for (const sx of [-1, 1]) {
-      const clavicle = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.022, 0.26, 5), boneMat);
-      clavicle.position.set(sx * 0.13, 2.48, -0.08);
-      clavicle.rotation.z = sx * 1.35;
-      clavicle.rotation.y = sx * 0.3;
-      body.add(clavicle);
-    }
-
-    // Cuello
-    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 0.34, 8), skinMat);
-    neck.position.set(0, 2.65, -0.02);
-    neck.rotation.x = -0.15;
-    body.add(neck);
-
-    for (const sx of [-1, 1]) {
-      const tendon = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.02, 0.28, 4), fleshMat);
-      tendon.position.set(sx * 0.065, 2.64, -0.03);
-      tendon.rotation.z = sx * 0.12;
-      body.add(tendon);
-    }
-
-    // ========================================================================
-    // CABEZA Y ROSTRO FRONTAL
-    // ========================================================================
-    head.position.set(0, 2.85, -0.06);
-    body.add(head);
-
-    const cranium = new THREE.Mesh(new THREE.SphereGeometry(0.18, 14, 12), skinMat);
-    cranium.scale.set(0.72, 1.25, 1.2);
-    cranium.rotation.x = -0.22;
-    head.add(cranium);
-
-    // Pómulos y cuencas oculares
-    for (const sx of [-1, 1]) {
-      const cheek = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.12, 4), boneMat);
-      cheek.position.set(sx * 0.10, 0.02, -0.14);
-      cheek.rotation.set(-0.4, 0, sx * 0.4);
-      head.add(cheek);
-
-      const socket = new THREE.Mesh(new THREE.SphereGeometry(0.052, 8, 6), voidDark);
-      socket.position.set(sx * 0.065, 0.06, -0.17);
-      socket.scale.set(1.0, 1.4, 0.8);
-      head.add(socket);
-
-      // Ojos brillantes rojos con núcleo incandescente
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.016, 8, 8), eyeMat);
-      eye.position.set(sx * 0.065, 0.055, -0.195);
-      head.add(eye);
-      eyes.push(eye);
-    }
-
-    // Luz propia en los ojos para iluminar la cara
-    const eyeLight = new THREE.PointLight(0xff0000, 2.0, 1.8);
-    eyeLight.position.set(0, 0.05, -0.3);
-    head.add(eyeLight);
-
-    // Mandíbula desencajada alargada
-    const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.24, 0.16), skinMat);
-    jaw.position.set(0, -0.16, -0.12);
-    jaw.rotation.x = 0.28;
-    head.add(jaw);
-
-    // Garganta oscura
-    const mouthVoid = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.19, 0.13), voidDark);
-    mouthVoid.position.set(0, -0.14, -0.165);
-    head.add(mouthVoid);
-
-    // Dientes de aguja visibles
-    for (let t = 0; t < 6; t++) {
-      const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.007, 0.038, 4), boneMat);
-      tooth.position.set((t - 2.5) * 0.013, -0.055, -0.215);
-      tooth.rotation.x = Math.PI;
-      head.add(tooth);
-
-      const bTooth = tooth.clone();
-      bTooth.position.set((t - 2.5) * 0.012, -0.22, -0.195);
-      bTooth.rotation.x = 0;
-      head.add(bTooth);
-    }
-
-    // Piernas
-    for (const sx of [-1, 1]) {
-      const hip = new THREE.Group();
-      hip.position.set(sx * 0.14, 1.42, 0);
-      body.add(hip);
-      const thigh = createAnatomicalBone(0.72, 0.075, 0.05);
-      hip.add(thigh);
-      const knee = new THREE.Group();
-      knee.position.y = -0.72;
-      hip.add(knee);
-      const patella = new THREE.Mesh(new THREE.SphereGeometry(0.038, 6, 6), boneMat);
-      patella.position.set(0, 0, -0.04);
-      knee.add(patella);
-      const shin = createAnatomicalBone(0.74, 0.05, 0.035);
-      knee.add(shin);
-      const foot = new THREE.Group();
-      foot.position.set(0, -0.75, 0);
-      knee.add(foot);
-      const footBone = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.04, 0.28), skinMat);
-      footBone.position.set(0, 0.02, -0.1);
-      foot.add(footBone);
-      for (let toe = 0; toe < 3; toe++) {
-        const claw = new THREE.Mesh(new THREE.ConeGeometry(0.012, 0.08, 4), clawMat);
-        claw.rotation.x = Math.PI / 2 + 0.3;
-        claw.position.set((toe - 1) * 0.026, 0.01, -0.26);
-        foot.add(claw);
+        // Si el archivo GLB incluye animaciones, reproduce la primera (idle/respiración/caminar)
+        if (gltf.animations.length > 0) {
+          mixer = new THREE.AnimationMixer(model);
+          const action = mixer.clipAction(gltf.animations[0]);
+          action.play();
+        }
+      },
+      undefined,
+      (err) => {
+        console.error('Error cargando /models/monster.glb:', err);
       }
-      legs.push({ hip, knee });
-    }
-
-    // Brazos con garras
-    for (const sx of [-1, 1]) {
-      const sh = new THREE.Group();
-      sh.position.set(sx * 0.26, 2.45, -0.02);
-      body.add(sh);
-      const deltoid = new THREE.Mesh(new THREE.SphereGeometry(0.065, 8, 6), skinMat);
-      deltoid.scale.set(1, 1.2, 1);
-      sh.add(deltoid);
-      const uArm = createAnatomicalBone(0.85, 0.06, 0.042);
-      sh.add(uArm);
-      const el = new THREE.Group();
-      el.position.y = -0.85;
-      sh.add(el);
-      const elbowBone = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.09, 4), boneMat);
-      elbowBone.rotation.x = -Math.PI / 2 - 0.2;
-      elbowBone.position.set(0, 0, 0.035);
-      el.add(elbowBone);
-      const fArm = createAnatomicalBone(0.95, 0.042, 0.028);
-      el.add(fArm);
-      const palm = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.12, 0.02), skinMat);
-      palm.position.set(0, -1.0, 0);
-      el.add(palm);
-      for (let f = 0; f < 5; f++) {
-        const finger = new THREE.Group();
-        finger.position.set((f - 2) * 0.02, -1.06, 0);
-        const phalanx = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.011, 0.22, 4), boneMat);
-        phalanx.position.y = -0.11;
-        phalanx.rotation.x = 0.12;
-        finger.add(phalanx);
-        const tip = new THREE.Mesh(new THREE.ConeGeometry(0.009, 0.12, 4), clawMat);
-        tip.position.set(0, -0.26, 0.025);
-        tip.rotation.x = Math.PI + 0.35;
-        finger.add(tip);
-        el.add(finger);
-      }
-      arms.push({ sh, el });
-    }
-
-    // ========================================================================
-    // GIRO DE 180° (Math.PI) PARA QUE QUEDE DE FRENTE MIRANDO A LA PANTALLA
-    // ========================================================================
-    group.position.set(1.25, -0.2, 0); 
-    group.rotation.y = Math.PI - 0.35; // De frente al jugador, levemente girado hacia el centro
-    scene.add(group);
+    );
 
     let animId: number;
-    let clock = new THREE.Clock();
+    const clock = new THREE.Clock();
 
     const animate = () => {
       animId = requestAnimationFrame(animate);
-      const time = clock.getElapsedTime();
-
-      // Respiración del tórax
-      chest.scale.x = 1.1 + Math.sin(time * 1.5) * 0.04;
-      body.position.y = Math.sin(time * 1.2) * 0.02;
-
-      // Inclinación acechante de cabeza
-      head.rotation.y = Math.sin(time * 0.5) * 0.2;
-      head.rotation.z = 0.14 + Math.sin(time * 0.8) * 0.06;
-
-      // Movimiento de brazos con garras
-      arms.forEach((a, i) => {
-        a.sh.rotation.z = (i ? -1 : 1) * (0.08 + Math.sin(time * 1.3 + i * 2) * 0.03);
-        a.el.rotation.x = -0.18 + Math.sin(time * 1.1 + i) * 0.04;
-      });
-
-      // Pulso brillante de los ojos rojos
-      const pulse = 0.8 + Math.sin(time * 4.5) * 0.35;
-      eyes.forEach((e) => e.scale.setScalar(pulse * 1.3 + 0.2));
-      eyeLight.intensity = 1.5 + Math.sin(time * 4.5) * 0.8;
-
+      const dt = clock.getDelta();
+      if (mixer) mixer.update(dt);
       renderer.render(scene, camera);
     };
-
     animate();
 
     const handleResize = () => {
@@ -331,57 +101,50 @@ function ObserverMenu3D() {
 }
 
 // ============================================================================
-// MENUBACKDROP
+// FONDO DEL MENÚ (FONDO ORIGINAL HECHO POR CÓDIGO + BICHO 3D)
 // ============================================================================
 export function MenuBackdrop() {
   return (
     <div className="fixed inset-0 overflow-hidden bg-[#030507]" style={{ zIndex: 0 }}>
-      {/* 1. Fondo personalizado (public/fondo.jpg) */}
-      <img
-        src="/fondo.jpg"
-        alt="Fondo"
-        className="absolute inset-0 w-full h-full object-cover object-center opacity-30 select-none"
-      />
-
-      {/* 2. Tu monstruo 3D renderizado mirando al frente */}
-      <ObserverMenu3D />
-
-      {/* 3. Iluminación ambiental y atmósfera */}
+      {/* Luces y degradados atmosféricos originales */}
       <div 
         className="absolute inset-0" 
         style={{ 
-          background: 'radial-gradient(ellipse at 75% 45%, rgba(140,20,25,.38), transparent 60%), radial-gradient(ellipse at 20% 80%, rgba(20,60,80,.32), transparent 60%)' 
+          background: 'radial-gradient(ellipse at 70% 40%, rgba(120,20,25,.25), transparent 55%), radial-gradient(ellipse at 20% 80%, rgba(30,70,90,.28), transparent 60%)' 
         }} 
       />
       <div 
         className="absolute inset-0 anim-flick" 
         style={{ 
-          background: 'radial-gradient(circle at 76% 25%, rgba(255,40,30,.22), transparent 32%)' 
+          background: 'radial-gradient(circle at 78% 18%, rgba(255,40,30,.22), transparent 28%)' 
         }} 
       />
 
-      {/* Niebla submarina flotante */}
+      {/* Tu nuevo bicho 3D renderizado en tiempo real */}
+      <ObserverMenu3D />
+
+      {/* Capas de niebla flotante */}
       {[0, 1, 2].map((i) => (
-        <div
-          key={i}
-          className="absolute inset-x-[-20%] pointer-events-none"
-          style={{
-            bottom: `${i * 14}%`,
-            height: '40%',
-            background: 'radial-gradient(ellipse at center, rgba(140,160,170,.08), transparent 65%)',
-            animation: `drift ${14 + i * 6}s ease-in-out ${i * -4}s infinite alternate`
-          }}
+        <div 
+          key={i} 
+          className="absolute inset-x-[-20%] pointer-events-none" 
+          style={{ 
+            bottom: `${i * 14}%`, 
+            height: '40%', 
+            background: 'radial-gradient(ellipse at center, rgba(140,160,170,.09), transparent 65%)', 
+            animation: `drift ${14 + i * 6}s ease-in-out ${i * -4}s infinite alternate` 
+          }} 
         />
       ))}
 
-      {/* Sombra inferior */}
-      <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black via-black/70 to-transparent pointer-events-none" />
+      {/* Sombra inferior para garantizar lectura de botones */}
+      <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black to-transparent pointer-events-none" />
     </div>
   );
 }
 
 // ============================================================================
-// MAIN MENU
+// MAIN MENU & PANELES UI
 // ============================================================================
 export function MainMenu(p: {
   hasSave: boolean; saveInfo?: string; alias: string; setAlias: (s: string) => void;
@@ -472,10 +235,9 @@ export function Credits({ onClose }: { onClose: () => void }) {
         <p><b className="text-white">PROYECTO ABISMO</b> — juego de terror y supervivencia en primera persona.</p>
         <p><span className="text-cyan-300">Diseño, programación e historia:</span> equipo ABISMO.</p>
         <p><span className="text-cyan-300">Motor 3D:</span> Three.js (licencia MIT) sobre React + Vite + Tailwind CSS.</p>
-        <p><span className="text-cyan-300">Gráficos:</span> texturas, modelos de criatura y escenarios generados proceduralmente en el propio código (sin recursos externos).</p>
-        <p><span className="text-cyan-300">Audio:</span> música dinámica y efectos sintetizados en tiempo real con WebAudio (originales, libres de derechos). Las voces son indicativas: sustituibles por grabaciones.</p>
+        <p><span className="text-cyan-300">Gráficos:</span> escenarios y modelos 3D con texturas PBR integradas.</p>
+        <p><span className="text-cyan-300">Audio:</span> música dinámica y efectos sintetizados en tiempo real con WebAudio (originales, libres de derechos).</p>
         <p><span className="text-cyan-300">Personajes:</span> Dan Ortega (protagonista), Lena Park (radio de rescate), Dra. Elena Voss (NEXUS), T. Reyes (Seguridad), El Observador.</p>
-        <p className="text-slate-500 text-xs">Todos los recursos son provisionales y pueden reemplazarse por modelos, texturas y sonidos definitivos manteniendo la misma arquitectura.</p>
       </div>
     </Shell>
   );
@@ -549,7 +311,7 @@ export function SettingsPanel({ s, onChange, onClose }: { s: Settings; onChange:
         <Row label="Ambiente">{Sl('ambience', 0, 1, 0.05)}</Row>
       </>}
       {tab === 'gfx' && <>
-        <Row label="Calidad" hint="Bajo: sin sombras · Medio: sombras de linterna · Alto: sombras nítidas y más luces. Se aplica al reiniciar el nivel.">
+        <Row label="Calidad" hint="Bajo: sin sombras · Medio: sombras de linterna · Alto: sombras nítidas y más luces.">
           <div className="flex gap-1">{(['bajo', 'medio', 'alto'] as const).map((q) => <button key={q} className={`btn ${s.quality === q ? 'btn-primary' : ''}`} onClick={() => { audio.click(); set('quality', q); }}>{q}</button>)}</div>
         </Row>
         <Row label="Campo de visión">{Sl('fov', 60, 100, 1, (n) => `${n}°`)}</Row>
