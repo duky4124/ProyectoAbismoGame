@@ -394,4 +394,5 @@ export function buildChapter1(g: any) {
   });
 }
 
-export default loadChapter1;
+export const loadChapter1 = buildChapter1;
+export default buildChapter1;
