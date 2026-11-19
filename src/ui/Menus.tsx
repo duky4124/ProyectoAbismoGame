@@ -7,21 +7,47 @@ export function fmtTime(s: number) { const m = Math.floor(s / 60); return `${m}:
 export function MenuBackdrop() {
   return (
     <div className="fixed inset-0 overflow-hidden bg-[#030507]" style={{ zIndex: 0 }}>
-      <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at 70% 40%, rgba(120,20,25,.25), transparent 55%), radial-gradient(ellipse at 20% 80%, rgba(30,70,90,.28), transparent 60%)' }} />
-      <div className="absolute inset-0 anim-flick" style={{ background: 'radial-gradient(circle at 78% 18%, rgba(255,40,30,.22), transparent 28%)' }} />
-      {/* figura alta lejana */}
-      <div className="absolute bottom-0 right-[12%] hidden sm:block anim-flick" style={{ width: 70, height: '72%', opacity: 0.55 }}>
-        <div className="absolute left-1/2 -translate-x-1/2 top-0 rounded-full bg-gradient-to-b from-[#3a3a38] to-[#0a0a0a]" style={{ width: 20, height: 46 }} />
-        <div className="absolute left-1/2 -translate-x-1/2 top-12 bg-gradient-to-b from-[#1b1b1a] to-black" style={{ width: 18, height: '55%' }} />
-        <div className="absolute left-[8%] top-14 bg-black" style={{ width: 4, height: '58%', transform: 'rotate(4deg)' }} />
-        <div className="absolute right-[8%] top-14 bg-black" style={{ width: 4, height: '58%', transform: 'rotate(-4deg)' }} />
-        <div className="absolute left-1/2 -translate-x-[9px] top-[22px] bg-red-600 rounded-full" style={{ width: 3, height: 3, boxShadow: '0 0 8px 3px #f00' }} />
-        <div className="absolute left-1/2 translate-x-[6px] top-[22px] bg-red-600 rounded-full" style={{ width: 3, height: 3, boxShadow: '0 0 8px 3px #f00' }} />
+      {/* 1. IMAGEN DE FONDO */}
+      <img
+        src="/fondo.jpg" 
+        alt="Fondo"
+        className="absolute inset-0 w-full h-full object-cover object-center opacity-40"
+      />
+
+      {/* Capas de atmósfera roja / azul sobre el fondo */}
+      <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at 70% 40%, rgba(120,20,25,.35), transparent 60%), radial-gradient(ellipse at 20% 80%, rgba(30,70,90,.3), transparent 60%)' }} />
+      <div className="absolute inset-0 anim-flick" style={{ background: 'radial-gradient(circle at 78% 18%, rgba(255,40,30,.25), transparent 30%)' }} />
+
+      {/* 2. TU NUEVO BICHO */}
+      <div className="absolute bottom-0 right-[8%] sm:right-[14%] hidden sm:block pointer-events-none select-none z-0">
+        <img
+          src="/mi-bicho.png"
+          alt="Criatura"
+          className="anim-flick max-h-[75vh] w-auto object-contain opacity-75 drop-shadow-[0_0_25px_rgba(255,0,0,0.3)]"
+          style={{
+            /* Si quieres ajustar manualmente el tamaño o posición: */
+            // height: '650px',
+            // transform: 'scale(1.1)',
+          }}
+        />
       </div>
+
+      {/* Capas de niebla flotante (mantienen el ambiente de misterio) */}
       {[0, 1, 2].map((i) => (
-        <div key={i} className="absolute inset-x-[-20%]" style={{ bottom: `${i * 14}%`, height: '40%', background: 'radial-gradient(ellipse at center, rgba(140,160,170,.09), transparent 65%)', animation: `drift ${14 + i * 6}s ease-in-out ${i * -4}s infinite alternate` }} />
+        <div 
+          key={i} 
+          className="absolute inset-x-[-20%] pointer-events-none" 
+          style={{ 
+            bottom: `${i * 14}%`, 
+            height: '40%', 
+            background: 'radial-gradient(ellipse at center, rgba(140,160,170,.09), transparent 65%)', 
+            animation: `drift ${14 + i * 6}s ease-in-out ${i * -4}s infinite alternate` 
+          }} 
+        />
       ))}
-      <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black to-transparent" />
+
+      {/* Degradado oscuro inferior para que los textos se lean bien */}
+      <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black via-black/60 to-transparent pointer-events-none" />
     </div>
   );
 }
