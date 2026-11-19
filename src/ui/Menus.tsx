@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 /* ============================================================
-   FONDO GENERADO POR CÓDIGO (sin imágenes externas)
+   FONDO 100% GENERADO POR CÓDIGO (sin imágenes)
    ============================================================ */
 function ProceduralBackdrop() {
   return (
@@ -35,7 +35,7 @@ function ProceduralBackdrop() {
           background: radial-gradient(ellipse at 50% 50%, rgba(160,170,190,.05), transparent 60%);
           animation: drift 26s linear infinite alternate;
         }
-        .fog-2 { animation-duration: 41s; animation-direction: alternate-reverse; opacity:.7; }
+        .fog-2 { animation-duration:41s; animation-direction:alternate-reverse; opacity:.7; }
         .bg-vignette {
           position:absolute; inset:0;
           background: radial-gradient(ellipse at 50% 50%, transparent 45%, rgba(0,0,0,.75) 100%);
@@ -45,8 +45,8 @@ function ProceduralBackdrop() {
           43% { opacity:.7 } 45% { opacity:1 } 78% { opacity:.5 } 80% { opacity:1 }
         }
         @keyframes drift {
-          from { transform: translate(-4%, -2%) scale(1); }
-          to   { transform: translate(5%, 3%) scale(1.15); }
+          from { transform: translate(-4%,-2%) scale(1); }
+          to   { transform: translate(5%,3%) scale(1.15); }
         }
       `}</style>
     </div>
@@ -54,9 +54,8 @@ function ProceduralBackdrop() {
 }
 
 /* ============================================================
-   BICHO 3D DEL MENÚ
+   BICHO 3D DEL MENÚ — v3
    Plantado firme, mirando al frente, solo respira.
-   SIN movimiento lateral ni balanceos raros.
    ============================================================ */
 function ObserverMenu3D() {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -65,7 +64,6 @@ function ObserverMenu3D() {
     const mount = mountRef.current;
     if (!mount) return;
 
-    // --- Escena base ---
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
     camera.position.set(0, 1.4, 4.5);
@@ -73,13 +71,11 @@ function ObserverMenu3D() {
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.domElement.style.cssText =
-      'position:absolute;inset:0;width:100%;height:100%;';
+    renderer.domElement.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;';
     mount.appendChild(renderer.domElement);
 
     const resize = () => {
-      const w = mount.clientWidth;
-      const h = mount.clientHeight;
+      const w = mount.clientWidth, h = mount.clientHeight;
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
@@ -87,7 +83,6 @@ function ObserverMenu3D() {
     resize();
     window.addEventListener('resize', resize);
 
-    // --- Luces ---
     scene.add(new THREE.AmbientLight(0x404050, 0.7));
     const key = new THREE.DirectionalLight(0x8899bb, 1.1);
     key.position.set(-3, 5, 4);
@@ -96,11 +91,8 @@ function ObserverMenu3D() {
     rim.position.set(4, 2, -3);
     scene.add(rim);
 
-    const eyeLight = new THREE.PointLight(0xff2222, 1.2, 8);
-    scene.add(eyeLight);
-
-    // --- Carga del modelo ---
     let pivot: THREE.Group | null = null;
+    let eyeLight: THREE.PointLight | null = null;
 
     new GLTFLoader().load(
       '/models/monster.glb',
@@ -109,8 +101,7 @@ function ObserverMenu3D() {
 
         // Auto-escala a ~2.6 m y pies en y = 0
         const box = new THREE.Box3().setFromObject(model);
-        const size = new THREE.Vector3();
-        const center = new THREE.Vector3();
+        const size = new THREE.Vector3(), center = new THREE.Vector3();
         box.getSize(size);
         box.getCenter(center);
         const s = 2.6 / Math.max(size.y, 0.001);
@@ -121,41 +112,41 @@ function ObserverMenu3D() {
 
         pivot = new THREE.Group();
         pivot.add(model);
-        scene.add(pivot);
 
-        // Luz roja de los ojos (altura de la cabeza, ligeramente adelante)
-        eyeLight.position.set(1.35, 2.15, 0.9);
+        // Luz roja de los ojos, HIJA del pivot (sigue al bicho)
+        eyeLight = new THREE.PointLight(0xff2222, 1.2, 8);
+        eyeLight.position.set(0, 2.15, 0.6);
+        pivot.add(eyeLight);
+
+        scene.add(pivot);
+        console.log('%c[MENU v3] modelo cargado', 'color:lime');
       },
       undefined,
       (err) => console.error('Error cargando monster.glb:', err)
     );
 
-    // --- Animación: respiración pesada, sin vaivén lateral ---
-    const clock = new THREE.Clock();
+    // --- Animación (sin THREE.Clock: nada de warnings) ---
+    const t0 = performance.now();
     let animId = 0;
 
     const animate = () => {
       animId = requestAnimationFrame(animate);
-      const t = clock.getElapsedTime();
+      const t = (performance.now() - t0) / 1000;
 
       if (pivot) {
-        const breathe = Math.sin(t * 1.2);       // ritmo de respiración
-        const breatheSlow = Math.sin(t * 0.6);   // inhalación profunda secundaria
+        const breathe = Math.sin(t * 1.2);
 
-        // 1. Posición: plantado firme, solo se eleva apenas al inhalar
+        // Plantado FIRME: posición y ángulo fijos, sin vaivén lateral
         pivot.position.set(1.35, -0.1 + breathe * 0.012, 0.3);
-
-        // 2. Rotación: mirando fijo al frente, sin inclinaciones a los lados
         pivot.rotation.set(0.03 + breathe * 0.012, -0.30, 0);
 
-        // 3. Expansión torácica (inhalar / exhalar)
+        // Expansión torácica al inhalar
         const s = 1 + breathe * 0.012;
         pivot.scale.set(s, s, s);
       }
-
-      // Pulso tenue de los ojos
-      eyeLight.intensity =
-        1.2 + Math.sin(t * 0.6) * 0.4 + Math.sin(t * 3.5) * 0.15;
+      if (eyeLight) {
+        eyeLight.intensity = 1.2 + Math.sin(t * 0.6) * 0.4 + Math.sin(t * 3.5) * 0.15;
+      }
 
       renderer.render(scene, camera);
     };
@@ -165,9 +156,7 @@ function ObserverMenu3D() {
       cancelAnimationFrame(animId);
       window.removeEventListener('resize', resize);
       renderer.dispose();
-      if (renderer.domElement.parentElement === mount) {
-        mount.removeChild(renderer.domElement);
-      }
+      if (renderer.domElement.parentElement === mount) mount.removeChild(renderer.domElement);
     };
   }, []);
 
@@ -176,19 +165,10 @@ function ObserverMenu3D() {
 
 /* ============================================================
    MENÚ PRINCIPAL
-   (Si ya tienes tus propios botones/título, conserva LOS TUYOS
-    y solo mantén <ProceduralBackdrop /> y <ObserverMenu3D />.)
    ============================================================ */
 export default function Menu({ onStart }: { onStart: () => void }) {
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        overflow: 'hidden',
-        fontFamily: 'monospace',
-      }}
-    >
+    <div style={{ position: 'fixed', inset: 0, overflow: 'hidden', fontFamily: 'monospace' }}>
       <ProceduralBackdrop />
       <ObserverMenu3D />
 
@@ -198,6 +178,12 @@ export default function Menu({ onStart }: { onStart: () => void }) {
         <button className="btn" disabled>CREDITOS</button>
         <button className="btn" onClick={() => window.close()}>SALIR</button>
       </div>
+
+      {/* MARCADOR VISUAL: si ves esto, el código nuevo está corriendo */}
+      <div style={{
+        position: 'absolute', bottom: 8, right: 12, zIndex: 20,
+        color: '#4a5568', fontSize: 11, letterSpacing: '.1em',
+      }}>MENU v3</div>
 
       <style>{`
         .menu-ui {
