@@ -3,7 +3,7 @@
 // src/game/chapter1.ts
 // ============================================================================
 
-export function loadChapter1(g: any) {
+export function buildChapter1(g: any) {
   const W = g.world;
 
   // --------------------------------------------------------------------------
