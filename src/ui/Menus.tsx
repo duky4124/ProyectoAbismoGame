@@ -2,7 +2,10 @@ import { useState } from 'react';
 import { CHAPTERS, DEFAULT_SETTINGS, loadProgress, loadScores, type Settings } from '../game/data';
 import { audio } from '../game/audio';
 
-export function fmtTime(s: number) { const m = Math.floor(s / 60); return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`; }
+export function fmtTime(s: number) { 
+  const m = Math.floor(s / 60); 
+  return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`; 
+}
 
 export function MenuBackdrop() {
   return (
@@ -35,35 +38,40 @@ export function MainMenu(p: {
       {label}{sub && <span className="block text-[10px] tracking-widest text-cyan-300/60 normal-case mt-0.5">{sub}</span>}
     </button>
   );
+
   return (
     <div className="fixed inset-0 z-10 overflow-y-auto">
-    <div className="min-h-full flex flex-col sm:flex-row items-center justify-center sm:justify-between gap-6 p-6 sm:p-14">
-      <div className="flex flex-col justify-center text-center sm:text-left">
-        <div className="text-[11px] sm:text-xs tracking-[.5em] text-cyan-300/70 font-mono2 mb-3">NEXUS CORP · AÑO 2049 · PROFUNDIDAD −8.000 m</div>
-        <h1 className="font-title text-5xl sm:text-6xl lg:text-8xl text-white anim-glitch leading-[0.95]" style={{ textShadow: '0 0 30px rgba(193,18,31,.5)' }}>
-          PROYECTO<br /><span className="text-[#d6202e]">ABISMO</span>
-        </h1>
-        <p className="mt-5 max-w-md text-sm text-slate-400 leading-relaxed hidden sm:block">
-          Terror, supervivencia y misterio en primera persona. Tu vehículo se estrella en una instalación olvidada. Algo te observa desde la oscuridad.
-        </p>
-        <div className="mt-6 hidden sm:flex items-center gap-2 text-xs text-slate-400 font-mono2">
-          <span>ALIAS:</span>
-          <input value={p.alias} maxLength={12} onChange={(e) => p.setAlias(e.target.value.toUpperCase())} className="bg-black/50 border border-white/20 px-2 py-1 text-cyan-200 w-36 tracking-widest outline-none focus:border-red-500" />
+      <div className="min-h-full flex flex-col sm:flex-row items-center justify-center sm:justify-between gap-6 p-6 sm:p-14">
+        <div className="flex flex-col justify-center text-center sm:text-left">
+          <div className="text-[11px] sm:text-xs tracking-[.5em] text-cyan-300/70 font-mono2 mb-3">NEXUS CORP · AÑO 2049 · PROFUNDIDAD −8.000 m</div>
+          <h1 className="font-title text-5xl sm:text-6xl lg:text-8xl text-white anim-glitch leading-[0.95]" style={{ textShadow: '0 0 30px rgba(193,18,31,.5)' }}>
+            PROYECTO<br /><span className="text-[#d6202e]">ABISMO</span>
+          </h1>
+          <p className="mt-5 max-w-md text-sm text-slate-400 leading-relaxed hidden sm:block">
+            Terror, supervivencia y misterio en primera persona. Tu vehículo se estrella en una instalación olvidada. Algo te observa desde la oscuridad.
+          </p>
+          <div className="mt-6 hidden sm:flex items-center gap-2 text-xs text-slate-400 font-mono2">
+            <span>ALIAS:</span>
+            <input value={p.alias} maxLength={12} onChange={(e) => p.setAlias(e.target.value.toUpperCase())} className="bg-black/50 border border-white/20 px-2 py-1 text-cyan-200 w-36 tracking-widest outline-none focus:border-red-500" />
+          </div>
+        </div>
+        
+        {/* LISTA DE BOTONES DEL MENÚ */}
+        <div className="w-full max-w-sm sm:w-72 lg:w-96 shrink-0 sm:self-center space-y-1.5">
+          {B('Nueva partida', p.onNew)}
+          {B('Continuar', p.onContinue, !p.hasSave, p.hasSave ? p.saveInfo : 'Sin partida guardada')}
+          {/* BOTÓN MULTIJUGADOR BLOQUEADO */}
+          {B('Multijugador', () => {}, true, '🔒 Bloqueado · Servidores NEXUS fuera de línea')}
+          {B('Seleccionar capítulo', p.onChapters)}
+          {B('Récords', p.onScores)}
+          {B('Ajustes', p.onSettings)}
+          {B('Créditos', p.onCredits)}
+          {B('Salir', p.onExit)}
+          <div className="pt-4 text-[10px] text-slate-500 font-mono2 tracking-wider leading-relaxed hidden sm:block">
+            WASD mover · RATÓN mirar · SHIFT correr · C agacharse · ESPACIO saltar<br />F linterna · E interactuar · TAB mochila · G distractor · Q curarse · ESC pausa
+          </div>
         </div>
       </div>
-      <div className="w-full max-w-sm sm:w-72 lg:w-96 shrink-0 sm:self-center space-y-1.5">
-        {B('Nueva partida', p.onNew)}
-        {B('Continuar', p.onContinue, !p.hasSave, p.hasSave ? p.saveInfo : 'Sin partida guardada')}
-        {B('Seleccionar capítulo', p.onChapters)}
-        {B('Récords', p.onScores)}
-        {B('Ajustes', p.onSettings)}
-        {B('Créditos', p.onCredits)}
-        {B('Salir', p.onExit)}
-        <div className="pt-4 text-[10px] text-slate-500 font-mono2 tracking-wider leading-relaxed hidden sm:block">
-          WASD mover · RATÓN mirar · SHIFT correr · C agacharse · ESPACIO saltar<br />F linterna · E interactuar · TAB mochila · G distractor · Q curarse · ESC pausa
-        </div>
-      </div>
-    </div>
     </div>
   );
 }
