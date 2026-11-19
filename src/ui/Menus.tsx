@@ -1,7 +1,21 @@
-// src/ui/Menu.tsx
+// src/ui/Menus.tsx
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+
+/* ============================================================
+   EXPORTS QUE USAN OTROS ARCHIVOS (NO BORRAR)
+   Hud.tsx hace: import { fmtTime } from './Menus';
+   ============================================================ */
+
+/** Formatea segundos a "m:ss" (o "m:ss.d" con décimas). */
+export function fmtTime(t: number, withTenths = false): string {
+  const m = Math.floor(t / 60);
+  const s = Math.floor(t % 60);
+  const base = `${m}:${s.toString().padStart(2, '0')}`;
+  if (withTenths) return `${base}.${Math.floor((t % 1) * 10)}`;
+  return base;
+}
 
 /* ============================================================
    FONDO 100% GENERADO POR CÓDIGO (sin imágenes)
@@ -54,8 +68,9 @@ function ProceduralBackdrop() {
 }
 
 /* ============================================================
-   BICHO 3D DEL MENÚ — v3
+   BICHO 3D DEL MENÚ
    Plantado firme, mirando al frente, solo respira.
+   SIN vaivén lateral ni balanceos raros.
    ============================================================ */
 function ObserverMenu3D() {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -113,19 +128,19 @@ function ObserverMenu3D() {
         pivot = new THREE.Group();
         pivot.add(model);
 
-        // Luz roja de los ojos, HIJA del pivot (sigue al bicho)
+        // Luz roja de los ojos, hija del pivot (sigue al bicho)
         eyeLight = new THREE.PointLight(0xff2222, 1.2, 8);
         eyeLight.position.set(0, 2.15, 0.6);
         pivot.add(eyeLight);
 
         scene.add(pivot);
-        console.log('%c[MENU v3] modelo cargado', 'color:lime');
+        console.log('%c[MENU v4] modelo cargado', 'color:lime');
       },
       undefined,
       (err) => console.error('Error cargando monster.glb:', err)
     );
 
-    // --- Animación (sin THREE.Clock: nada de warnings) ---
+    // Animación con performance.now (sin THREE.Clock = sin warning)
     const t0 = performance.now();
     let animId = 0;
 
@@ -166,7 +181,7 @@ function ObserverMenu3D() {
 /* ============================================================
    MENÚ PRINCIPAL
    ============================================================ */
-export default function Menu({ onStart }: { onStart: () => void }) {
+function Menu({ onStart }: { onStart: () => void }) {
   return (
     <div style={{ position: 'fixed', inset: 0, overflow: 'hidden', fontFamily: 'monospace' }}>
       <ProceduralBackdrop />
@@ -179,11 +194,11 @@ export default function Menu({ onStart }: { onStart: () => void }) {
         <button className="btn" onClick={() => window.close()}>SALIR</button>
       </div>
 
-      {/* MARCADOR VISUAL: si ves esto, el código nuevo está corriendo */}
+      {/* MARCADOR: confirma que esta versión está corriendo. Bórralo cuando funcione todo. */}
       <div style={{
         position: 'absolute', bottom: 8, right: 12, zIndex: 20,
         color: '#4a5568', fontSize: 11, letterSpacing: '.1em',
-      }}>MENU v3</div>
+      }}>MENU v4</div>
 
       <style>{`
         .menu-ui {
@@ -211,3 +226,10 @@ export default function Menu({ onStart }: { onStart: () => void }) {
     </div>
   );
 }
+
+/* ============================================================
+   EXPORTS DEL MENÚ (cubre las 3 formas posibles de importarlo)
+   ============================================================ */
+export { Menu };
+export { Menu as MainMenu };
+export default Menu;
