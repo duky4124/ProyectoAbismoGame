@@ -1,57 +1,376 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import * as THREE from 'three';
 import { CHAPTERS, DEFAULT_SETTINGS, loadProgress, loadScores, type Settings } from '../game/data';
 import { audio } from '../game/audio';
 
-export function fmtTime(s: number) { const m = Math.floor(s / 60); return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`; }
+export function fmtTime(s: number) { 
+  const m = Math.floor(s / 60); 
+  return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`; 
+}
 
+// ============================================================================
+// COMPONENTE 3D: RENDERIZA TU CRIATURA "OBSERVER" EN EL MENÚ
+// ============================================================================
+function ObserverMenu3D() {
+  const mountRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const container = mountRef.current;
+    if (!container) return;
+
+    // 1. Escena y Cámara
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(42, container.clientWidth / container.clientHeight, 0.1, 50);
+    camera.position.set(0, 1.8, 3.8);
+
+    // 2. Renderer con transparencia
+    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    container.appendChild(renderer.domElement);
+
+    // 3. Luces atmosféricas para resaltar la piel cadavérica y los huesos
+    const ambientLight = new THREE.AmbientLight(0x0c131a, 1.2);
+    scene.add(ambientLight);
+
+    const redRimLight = new THREE.PointLight(0xff1a1a, 4, 10);
+    redRimLight.position.set(1.5, 2.5, -1.0);
+    scene.add(redRimLight);
+
+    const coldKeyLight = new THREE.DirectionalLight(0x407080, 1.5);
+    coldKeyLight.position.set(-2, 3, 3);
+    scene.add(coldKeyLight);
+
+    // ========================================================================
+    // CONSTRUCCIÓN DEL BICHO (TU MODELO EXACTO)
+    // ========================================================================
+    const group = new THREE.Group();
+    const body = new THREE.Group();
+    const head = new THREE.Group();
+    const legs: { hip: THREE.Group; knee: THREE.Group }[] = [];
+    const arms: { sh: THREE.Group; el: THREE.Group }[] = [];
+    const eyes: THREE.Mesh[] = [];
+
+    const skinMat = new THREE.MeshStandardMaterial({
+      color: 0xedeae2,
+      roughness: 0.38,
+      metalness: 0.05,
+      emissive: 0x181512,
+    });
+    const boneMat = new THREE.MeshStandardMaterial({
+      color: 0xf5f3ee,
+      roughness: 0.25,
+      metalness: 0.1,
+    });
+    const voidDark = new THREE.MeshBasicMaterial({ color: 0x020202 });
+    const fleshMat = new THREE.MeshStandardMaterial({ color: 0x3d1a24, roughness: 0.45, emissive: 0x140408 });
+    const clawMat = new THREE.MeshStandardMaterial({ color: 0x111113, roughness: 0.15, metalness: 0.4 });
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff1100 });
+
+    const createAnatomicalBone = (len: number, rTop: number, rBot: number) => {
+      const grp = new THREE.Group();
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(rBot, rTop, len, 8), skinMat);
+      shaft.position.y = -len / 2;
+      grp.add(shaft);
+      const joint = new THREE.Mesh(new THREE.SphereGeometry(rTop * 1.12, 6, 6), boneMat);
+      joint.position.y = -0.02;
+      grp.add(joint);
+      return grp;
+    };
+
+    group.add(body);
+
+    // Pelvis
+    const pelvis = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.12, 0.24, 7), skinMat);
+    pelvis.position.y = 1.48;
+    pelvis.scale.set(1.1, 1, 0.7);
+    body.add(pelvis);
+
+    // Columna
+    const lowerSpine = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.08, 0.42, 6), boneMat);
+    lowerSpine.position.set(0, 1.72, 0.02);
+    body.add(lowerSpine);
+
+    // Tórax
+    const chest = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.14, 0.85, 9), skinMat);
+    chest.scale.set(1.1, 1.0, 0.62);
+    chest.position.set(0, 2.15, -0.02);
+    body.add(chest);
+
+    // Esternón
+    const sternum = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.45, 0.03), boneMat);
+    sternum.position.set(0, 2.2, -0.16);
+    body.add(sternum);
+
+    // Costillas
+    for (let i = 0; i < 8; i++) {
+      const ribW = 0.19 - i * 0.008;
+      const rib = new THREE.Mesh(new THREE.TorusGeometry(ribW, 0.012, 5, 14, Math.PI * 0.95), boneMat);
+      rib.rotation.set(Math.PI / 2 + 0.1, 0, Math.PI / 2);
+      rib.scale.set(1, 0.65, 1);
+      rib.position.set(0, 1.82 + i * 0.075, -0.01);
+      body.add(rib);
+    }
+
+    // Vértebras
+    for (let i = 0; i < 9; i++) {
+      const vert = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.16, 4), boneMat);
+      vert.rotation.x = Math.PI / 2 + 0.25;
+      vert.position.set(0, 1.62 + i * 0.11, 0.12 + Math.sin(i * 0.3) * 0.02);
+      body.add(vert);
+    }
+
+    // Clavículas
+    for (const sx of [-1, 1]) {
+      const clavicle = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.022, 0.26, 5), boneMat);
+      clavicle.position.set(sx * 0.13, 2.48, -0.08);
+      clavicle.rotation.z = sx * 1.35;
+      clavicle.rotation.y = sx * 0.3;
+      body.add(clavicle);
+    }
+
+    // Cuello
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 0.34, 8), skinMat);
+    neck.position.set(0, 2.65, -0.02);
+    neck.rotation.x = -0.15;
+    body.add(neck);
+
+    for (const sx of [-1, 1]) {
+      const tendon = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.02, 0.28, 4), fleshMat);
+      tendon.position.set(sx * 0.065, 2.64, -0.03);
+      tendon.rotation.z = sx * 0.12;
+      body.add(tendon);
+    }
+
+    // Cabeza
+    head.position.set(0, 2.85, -0.06);
+    body.add(head);
+
+    const cranium = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), skinMat);
+    cranium.scale.set(0.72, 1.25, 1.2);
+    cranium.rotation.x = -0.22;
+    head.add(cranium);
+
+    for (const sx of [-1, 1]) {
+      const cheek = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.12, 4), boneMat);
+      cheek.position.set(sx * 0.10, 0.02, -0.14);
+      cheek.rotation.set(-0.4, 0, sx * 0.4);
+      head.add(cheek);
+
+      const socket = new THREE.Mesh(new THREE.SphereGeometry(0.048, 8, 6), voidDark);
+      socket.position.set(sx * 0.065, 0.06, -0.17);
+      socket.scale.set(1.0, 1.4, 0.8);
+      head.add(socket);
+
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 5), eyeMat);
+      eye.position.set(sx * 0.065, 0.055, -0.19);
+      head.add(eye);
+      eyes.push(eye);
+    }
+
+    // Mandíbula y dientes
+    const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.22, 0.16), skinMat);
+    jaw.position.set(0, -0.16, -0.12);
+    jaw.rotation.x = 0.25;
+    head.add(jaw);
+
+    const mouthVoid = new THREE.Mesh(new THREE.BoxGeometry(0.065, 0.18, 0.12), voidDark);
+    mouthVoid.position.set(0, -0.14, -0.16);
+    head.add(mouthVoid);
+
+    for (let t = 0; t < 6; t++) {
+      const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.006, 0.03, 3), boneMat);
+      tooth.position.set((t - 2.5) * 0.012, -0.06, -0.21);
+      tooth.rotation.x = Math.PI;
+      head.add(tooth);
+      const bTooth = tooth.clone();
+      bTooth.position.set((t - 2.5) * 0.011, -0.21, -0.19);
+      bTooth.rotation.x = 0;
+      head.add(bTooth);
+    }
+
+    // Piernas
+    for (const sx of [-1, 1]) {
+      const hip = new THREE.Group();
+      hip.position.set(sx * 0.14, 1.42, 0);
+      body.add(hip);
+      const thigh = createAnatomicalBone(0.72, 0.075, 0.05);
+      hip.add(thigh);
+      const knee = new THREE.Group();
+      knee.position.y = -0.72;
+      hip.add(knee);
+      const patella = new THREE.Mesh(new THREE.SphereGeometry(0.038, 6, 6), boneMat);
+      patella.position.set(0, 0, -0.04);
+      knee.add(patella);
+      const shin = createAnatomicalBone(0.74, 0.05, 0.035);
+      knee.add(shin);
+      const foot = new THREE.Group();
+      foot.position.set(0, -0.75, 0);
+      knee.add(foot);
+      const footBone = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.04, 0.28), skinMat);
+      footBone.position.set(0, 0.02, -0.1);
+      foot.add(footBone);
+      for (let toe = 0; toe < 3; toe++) {
+        const claw = new THREE.Mesh(new THREE.ConeGeometry(0.012, 0.08, 4), clawMat);
+        claw.rotation.x = Math.PI / 2 + 0.3;
+        claw.position.set((toe - 1) * 0.026, 0.01, -0.26);
+        foot.add(claw);
+      }
+      legs.push({ hip, knee });
+    }
+
+    // Brazos
+    for (const sx of [-1, 1]) {
+      const sh = new THREE.Group();
+      sh.position.set(sx * 0.26, 2.45, -0.02);
+      body.add(sh);
+      const deltoid = new THREE.Mesh(new THREE.SphereGeometry(0.065, 8, 6), skinMat);
+      deltoid.scale.set(1, 1.2, 1);
+      sh.add(deltoid);
+      const uArm = createAnatomicalBone(0.85, 0.06, 0.042);
+      sh.add(uArm);
+      const el = new THREE.Group();
+      el.position.y = -0.85;
+      sh.add(el);
+      const elbowBone = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.09, 4), boneMat);
+      elbowBone.rotation.x = -Math.PI / 2 - 0.2;
+      elbowBone.position.set(0, 0, 0.035);
+      el.add(elbowBone);
+      const fArm = createAnatomicalBone(0.95, 0.042, 0.028);
+      el.add(fArm);
+      const palm = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.12, 0.02), skinMat);
+      palm.position.set(0, -1.0, 0);
+      el.add(palm);
+      for (let f = 0; f < 5; f++) {
+        const finger = new THREE.Group();
+        finger.position.set((f - 2) * 0.02, -1.06, 0);
+        const phalanx = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.011, 0.22, 4), boneMat);
+        phalanx.position.y = -0.11;
+        phalanx.rotation.x = 0.12;
+        finger.add(phalanx);
+        const tip = new THREE.Mesh(new THREE.ConeGeometry(0.009, 0.12, 4), clawMat);
+        tip.position.set(0, -0.26, 0.025);
+        tip.rotation.x = Math.PI + 0.35;
+        finger.add(tip);
+        el.add(finger);
+      }
+      arms.push({ sh, el });
+    }
+
+    // ========================================================================
+    // POSICIÓN EN PANTALLA (A la derecha, acechando)
+    // ========================================================================
+    group.position.set(1.2, -0.2, -0.3); // Posicionado a la derecha
+    group.rotation.y = -0.35; // Mirando ligeramente hacia el centro del menú
+    scene.add(group);
+
+    // Animación en bucle
+    let animId: number;
+    let clock = new THREE.Clock();
+
+    const animate = () => {
+      animId = requestAnimationFrame(animate);
+      const time = clock.getElapsedTime();
+
+      // Respiración del torso
+      chest.scale.x = 1.1 + Math.sin(time * 1.5) * 0.04;
+      body.position.y = Math.sin(time * 1.2) * 0.025;
+
+      // Movimiento tétrico de la cabeza acechando
+      head.rotation.y = Math.sin(time * 0.6) * 0.18 - 0.2;
+      head.rotation.z = 0.18 + Math.sin(time * 0.9) * 0.06;
+
+      // Movimiento sutil de brazos
+      arms.forEach((a, i) => {
+        a.sh.rotation.z = (i ? -1 : 1) * (0.08 + Math.sin(time * 1.3 + i * 2) * 0.03);
+        a.el.rotation.x = -0.2 + Math.sin(time * 1.1 + i) * 0.05;
+      });
+
+      // Pulso brillante en los ojos
+      const em = 0.7 + Math.sin(time * 4) * 0.3;
+      eyes.forEach((e) => e.scale.setScalar(em * 1.3 + 0.2));
+
+      renderer.render(scene, camera);
+    };
+
+    animate();
+
+    // Redimensión de ventana
+    const handleResize = () => {
+      if (!container) return;
+      camera.aspect = container.clientWidth / container.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(container.clientWidth, container.clientHeight);
+    };
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      cancelAnimationFrame(animId);
+      window.removeEventListener('resize', handleResize);
+      renderer.dispose();
+      if (container.contains(renderer.domElement)) {
+        container.removeChild(renderer.domElement);
+      }
+    };
+  }, []);
+
+  return <div ref={mountRef} className="absolute inset-0 pointer-events-none z-[1]" />;
+}
+
+// ============================================================================
+// MENUBACKDROP: FONDO + TU BICHO 3D + ATMÓSFERA
+// ============================================================================
 export function MenuBackdrop() {
   return (
     <div className="fixed inset-0 overflow-hidden bg-[#030507]" style={{ zIndex: 0 }}>
-      {/* 1. IMAGEN DE FONDO */}
+      {/* 1. IMAGEN DE FONDO (public/fondo.jpg) */}
       <img
-        src="/fondo.jpg" 
-        alt="Fondo"
-        className="absolute inset-0 w-full h-full object-cover object-center opacity-40"
+        src="/fondo.jpg"
+        alt="Fondo Abismo"
+        className="absolute inset-0 w-full h-full object-cover object-center opacity-30 select-none"
       />
 
-      {/* Capas de atmósfera roja / azul sobre el fondo */}
-      <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at 70% 40%, rgba(120,20,25,.35), transparent 60%), radial-gradient(ellipse at 20% 80%, rgba(30,70,90,.3), transparent 60%)' }} />
-      <div className="absolute inset-0 anim-flick" style={{ background: 'radial-gradient(circle at 78% 18%, rgba(255,40,30,.25), transparent 30%)' }} />
+      {/* 2. TU VERDADERO BICHO 3D (Renderizado en vivo) */}
+      <ObserverMenu3D />
 
-      {/* 2. TU NUEVO BICHO */}
-      <div className="absolute bottom-0 right-[8%] sm:right-[14%] hidden sm:block pointer-events-none select-none z-0">
-        <img
-          src="/mi-bicho.png"
-          alt="Criatura"
-          className="anim-flick max-h-[75vh] w-auto object-contain opacity-75 drop-shadow-[0_0_25px_rgba(255,0,0,0.3)]"
-          style={{
-            /* Si quieres ajustar manualmente el tamaño o posición: */
-            // height: '650px',
-            // transform: 'scale(1.1)',
-          }}
-        />
-      </div>
+      {/* 3. GRADIENTES Y ATMÓSFERA TÉTRICA */}
+      <div 
+        className="absolute inset-0" 
+        style={{ 
+          background: 'radial-gradient(ellipse at 75% 45%, rgba(140,20,25,.38), transparent 60%), radial-gradient(ellipse at 20% 80%, rgba(20,60,80,.32), transparent 60%)' 
+        }} 
+      />
+      <div 
+        className="absolute inset-0 anim-flick" 
+        style={{ 
+          background: 'radial-gradient(circle at 76% 25%, rgba(255,40,30,.22), transparent 32%)' 
+        }} 
+      />
 
-      {/* Capas de niebla flotante (mantienen el ambiente de misterio) */}
+      {/* Niebla submarina flotante */}
       {[0, 1, 2].map((i) => (
-        <div 
-          key={i} 
-          className="absolute inset-x-[-20%] pointer-events-none" 
-          style={{ 
-            bottom: `${i * 14}%`, 
-            height: '40%', 
-            background: 'radial-gradient(ellipse at center, rgba(140,160,170,.09), transparent 65%)', 
-            animation: `drift ${14 + i * 6}s ease-in-out ${i * -4}s infinite alternate` 
-          }} 
+        <div
+          key={i}
+          className="absolute inset-x-[-20%] pointer-events-none"
+          style={{
+            bottom: `${i * 14}%`,
+            height: '40%',
+            background: 'radial-gradient(ellipse at center, rgba(140,160,170,.08), transparent 65%)',
+            animation: `drift ${14 + i * 6}s ease-in-out ${i * -4}s infinite alternate`
+          }}
         />
       ))}
 
-      {/* Degradado oscuro inferior para que los textos se lean bien */}
-      <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black via-black/60 to-transparent pointer-events-none" />
+      {/* Sombra inferior para garantizar lectura de controles */}
+      <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black via-black/70 to-transparent pointer-events-none" />
     </div>
   );
 }
 
+// ============================================================================
+// MAIN MENU
+// ============================================================================
 export function MainMenu(p: {
   hasSave: boolean; saveInfo?: string; alias: string; setAlias: (s: string) => void;
   onNew: () => void; onContinue: () => void; onChapters: () => void; onSettings: () => void; onCredits: () => void; onScores: () => void; onExit: () => void;
@@ -61,11 +380,10 @@ export function MainMenu(p: {
       {label}{sub && <span className="block text-[10px] tracking-widest text-cyan-300/60 normal-case mt-0.5">{sub}</span>}
     </button>
   );
-
   return (
     <div className="fixed inset-0 z-10 overflow-y-auto">
       <div className="min-h-full flex flex-col sm:flex-row items-center justify-center sm:justify-between gap-6 p-6 sm:p-14">
-        <div className="flex flex-col justify-center text-center sm:text-left">
+        <div className="flex flex-col justify-center text-center sm:text-left z-10">
           <div className="text-[11px] sm:text-xs tracking-[.5em] text-cyan-300/70 font-mono2 mb-3">NEXUS CORP · AÑO 2049 · PROFUNDIDAD −8.000 m</div>
           <h1 className="font-title text-5xl sm:text-6xl lg:text-8xl text-white anim-glitch leading-[0.95]" style={{ textShadow: '0 0 30px rgba(193,18,31,.5)' }}>
             PROYECTO<br /><span className="text-[#d6202e]">ABISMO</span>
@@ -78,7 +396,7 @@ export function MainMenu(p: {
             <input value={p.alias} maxLength={12} onChange={(e) => p.setAlias(e.target.value.toUpperCase())} className="bg-black/50 border border-white/20 px-2 py-1 text-cyan-200 w-36 tracking-widest outline-none focus:border-red-500" />
           </div>
         </div>
-        <div className="w-full max-w-sm sm:w-72 lg:w-96 shrink-0 sm:self-center space-y-1.5">
+        <div className="w-full max-w-sm sm:w-72 lg:w-96 shrink-0 sm:self-center space-y-1.5 z-10">
           {B('Nueva partida', p.onNew)}
           {B('Continuar', p.onContinue, !p.hasSave, p.hasSave ? p.saveInfo : 'Sin partida guardada')}
           {B('Multijugador', () => {}, true, '🔒 Bloqueado · Servidores NEXUS fuera de línea')}
@@ -182,7 +500,6 @@ export function Farewell({ onBack }: { onBack: () => void }) {
   );
 }
 
-// ---------- Ajustes ----------
 function Row({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
   return (
     <div className="py-2 border-b border-white/5">
