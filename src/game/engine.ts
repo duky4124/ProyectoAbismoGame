@@ -221,23 +221,42 @@ export class Game {
     const n = q === 'bajo' ? 3 : q === 'medio' ? 5 : 7;
     for (let i = 0; i < n; i++) { const l = new THREE.PointLight(0xffffff, 0, 10, 2); this.pool.push(l); this.level.add(l); }
     
-        // Inicialización del mundo y entidades
+    // Inicialización del mundo con dimensiones explícitas
     this.world = new World(128, 128);
     this.enemy = new Observer(this);
-    const built = buildChapter1(this);
-    this.rt = built ?? null;
-    this.world.finalize(this.mats, q !== 'bajo');
-    this.level.add(this.world.group);
+    
+    let built: ChapterRuntime | null = null;
+    try {
+      built = buildChapter1(this) as ChapterRuntime;
+    } catch (e) {
+      console.warn("Aviso al construir capítulo:", e);
+    }
+    this.rt = built;
 
-    if (save) for (const [id, st] of Object.entries(save.doors ?? {})) { const d = this.world.doorList.find((x) => x.id === id); if (d) { d.open = st.open; d.locked = st.locked; d.t = st.open ? 1 : 0; this.world.updateDoor(d); } }
+    try {
+      this.world.finalize(this.mats, q !== 'bajo');
+    } catch (e) {
+      console.warn("Aviso al finalizar mundo:", e);
+    }
+    if (this.world.group) {
+      this.level.add(this.world.group);
+    }
+
+    if (save && save.doors) {
+      for (const [id, st] of Object.entries(save.doors)) {
+        const d = this.world.doorList?.find((x) => x.id === id);
+        if (d) { d.open = st.open; d.locked = st.locked; d.t = st.open ? 1 : 0; this.world.updateDoor(d); }
+      }
+    }
+    
     const P = this.P;
     P.hidden = null; P.vy = 0; P.y = 0; P.crouch = false; P.vx = P.vz = 0; P.speed = 0; P.exhausted = false; P.running = false;
     if (save) {
       P.x = save.px; P.z = save.pz; P.yaw = save.yaw; P.health = save.health; P.stamina = save.stamina; P.hunger = save.hunger; P.thirst = save.thirst;
       P.battery = save.battery; P.hasLight = save.hasLight;
     } else {
-      P.x = built?.start?.x ?? 0;
-      P.z = built?.start?.z ?? 0;
+      P.x = built?.start?.x ?? 8;
+      P.z = built?.start?.z ?? 8;
       P.yaw = built?.start?.yaw ?? 0;
       P.health = 100; P.stamina = 100; P.hunger = 85; P.thirst = 80; P.battery = 70; P.hasLight = false;
     }
@@ -248,10 +267,17 @@ export class Game {
     this.applySettings(this.settings);
     this.hud = this.makeHud();
     this.zoneName = '';
-    built?.start?.run?.(!!save);
+    
+    try {
+      built?.start?.run?.(!!save);
+    } catch (e) {
+      console.warn("Aviso al ejecutar inicio:", e);
+    }
+
     if (!save) this.checkpoint('Inicio del capítulo', true);
     this.emit('inventory'); this.emit('chapter', { n: chapter });
     this.emit('modal', 'none');
+  }
 
   // ---------- bucle ----------
   start() { if (this.running) return; this.running = true; this.last = performance.now(); const loop = (now: number) => { if (!this.running) return; this.raf = requestAnimationFrame(loop); const dt = Math.min(0.05, (now - this.last) / 1000); this.last = now; this.frame(dt); }; this.raf = requestAnimationFrame(loop); }
@@ -270,7 +296,6 @@ export class Game {
     if (!this.loaded) return;
     if (!this.paused) this.update(dt);
     else this.cameraUpdate(0);
-    // fundido
     if (this.fade !== this.fadeTarget) { const s = this.fadeSpeed * dt; this.fade = this.fade < this.fadeTarget ? Math.min(this.fadeTarget, this.fade + s) : Math.max(this.fadeTarget, this.fade - s); }
     this.renderer.render(this.scene, this.camera);
   }
