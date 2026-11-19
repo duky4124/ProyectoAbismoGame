@@ -47,22 +47,41 @@ export class Observer {
       '/models/monster.glb',
       (gltf) => {
         this.model = gltf.scene;
-        this.model.scale.setScalar(1.2); // Escala para ajustarlo a los túneles del juego
+
+        // --- AUTO-ESCALADO INTELIGENTE EN PARTIDA ---
+        const box = new THREE.Box3().setFromObject(this.model);
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
+
+        // Forzamos a que mida 2.8 metros de alto (monstruo aterrador)
+        const targetHeight = 2.8;
+        const scale = targetHeight / (size.y || 1);
+        this.model.scale.setScalar(scale);
+
+        // Alineamos pies exactamente a la base (Y = 0)
+        box.setFromObject(this.model);
+        box.getCenter(center);
+        this.model.position.x = -center.x;
+        this.model.position.y = -box.min.y;
+        this.model.position.z = -center.z;
+
         this.model.traverse((child) => {
           if ((child as THREE.Mesh).isMesh) {
             child.castShadow = true;
           }
         });
-        this.group.add(this.model);
 
-        // Guardamos las animaciones disponibles
+        const wrapper = new THREE.Group();
+        wrapper.add(this.model);
+        this.group.add(wrapper);
+
+        // Cargar animaciones si existen
         if (gltf.animations.length > 0) {
           this.mixer = new THREE.AnimationMixer(this.model);
           gltf.animations.forEach((clip) => {
             const name = clip.name.toLowerCase();
             this.actions[name] = this.mixer!.clipAction(clip);
           });
-          // Reproduce la primera animación por defecto (suele ser Idle)
           this.playAnim('idle');
         }
       },
@@ -332,7 +351,6 @@ export class Observer {
 
     if (dist > 90 && this.state !== 'chase') { this.despawn(); return; }
 
-    // Control de animaciones según el estado y velocidad
     if (this.speedNow > 0.1) {
       if (this.state === 'chase') this.playAnim('run');
       else this.playAnim('walk');
@@ -343,7 +361,6 @@ export class Observer {
 
     if (this.mixer) this.mixer.update(dt);
 
-    // Sonidos de pasos y crujidos al desplazarse
     if (this.speedNow > 0.1) {
       this.stepPhase += dt * this.speedNow * 1.55;
       const cyc = Math.floor(this.stepPhase / Math.PI);
