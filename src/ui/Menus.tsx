@@ -1,39 +1,31 @@
-import { useState, type CSSProperties, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
+import type { Settings } from '../game/data';
 
-// --- FUNCIONES DE FORMATEO (Requeridas por Hud.tsx) ---
+// --- UTILIDAD REQUERIDA POR HUD.TSX (Evita error de compilación) ---
 export function fmtTime(sec: number): string {
   if (typeof sec !== 'number' || isNaN(sec)) return '00:00';
   let s = Math.max(0, Math.floor(sec));
-  // Por si el tiempo viene en milisegundos
   if (s > 100000) s = Math.floor(s / 1000);
   const m = Math.floor(s / 60);
   const r = s % 60;
-  const h = Math.floor(m / 60);
-  const rm = m % 60;
-  if (h > 0) {
-    return `${h}:${rm.toString().padStart(2, '0')}:${r.toString().padStart(2, '0')}`;
-  }
-  return `${rm.toString().padStart(2, '0')}:${r.toString().padStart(2, '0')}`;
+  return `${m.toString().padStart(2, '0')}:${r.toString().padStart(2, '0')}`;
 }
 
 export function fmtScore(n: number): string {
   return (n || 0).toLocaleString('es-ES');
 }
 
-// --- FONDO DEL MENÚ ---
+// --- FONDO ORIGINAL DEL MENÚ ---
 export function MenuBackdrop() {
   return (
-    <div
-      className="fixed inset-0 pointer-events-none overflow-hidden"
-      style={{
-        background: 'radial-gradient(circle at 25% 45%, #071526 0%, #020710 65%, #000205 100%)',
-        zIndex: 0
-      }}
-    />
+    <div className="fixed inset-0 pointer-events-none overflow-hidden z-0 bg-gradient-to-b from-[#030712] via-[#051124] to-[#01040a]">
+      <div className="absolute inset-0 opacity-20 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-cyan-500/25 via-transparent to-transparent" />
+      <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-t from-black to-transparent" />
+    </div>
   );
 }
 
-// --- MENÚ PRINCIPAL ---
+// --- MENÚ PRINCIPAL (Alineado a la izquierda como el original) ---
 export interface MainMenuProps {
   hasSave: boolean;
   saveInfo?: string;
@@ -41,11 +33,11 @@ export interface MainMenuProps {
   setAlias?: (a: string) => void;
   onNew: () => void;
   onContinue: () => void;
-  onChapters?: () => void;
-  onSettings?: () => void;
-  onCredits?: () => void;
-  onScores?: () => void;
-  onExit?: () => void;
+  onChapters: () => void;
+  onSettings: () => void;
+  onCredits: () => void;
+  onScores: () => void;
+  onExit: () => void;
 }
 
 export function MainMenu({
@@ -61,96 +53,26 @@ export function MainMenu({
   onScores,
   onExit
 }: MainMenuProps) {
-  const [editingAlias, setEditingAlias] = useState(false);
+  const [editing, setEditing] = useState(false);
 
-  const B = (label: string, onClick?: () => void, disabled = false, sub?: string) => (
-    <button
-      key={label}
-      type="button"
-      disabled={disabled}
-      onClick={disabled ? undefined : onClick}
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'flex-start',
-        justifyContent: 'center',
-        background: disabled ? 'rgba(8, 12, 18, 0.45)' : 'rgba(12, 22, 34, 0.75)',
-        border: disabled ? '1px solid rgba(255, 255, 255, 0.06)' : '1px solid rgba(0, 255, 204, 0.25)',
-        color: disabled ? '#455668' : '#e0f0ff',
-        padding: '11px 18px',
-        margin: '5px 0',
-        width: '100%',
-        maxWidth: '320px',
-        fontFamily: 'monospace',
-        fontSize: '14px',
-        letterSpacing: '1.5px',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        transition: 'all 0.15s ease',
-        borderRadius: '3px',
-        textAlign: 'left'
-      }}
-      onMouseEnter={(e) => {
-        if (!disabled) {
-          e.currentTarget.style.borderColor = '#00ffcc';
-          e.currentTarget.style.background = 'rgba(0, 255, 204, 0.12)';
-          e.currentTarget.style.color = '#ffffff';
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (!disabled) {
-          e.currentTarget.style.borderColor = 'rgba(0, 255, 204, 0.25)';
-          e.currentTarget.style.background = 'rgba(12, 22, 34, 0.75)';
-          e.currentTarget.style.color = '#e0f0ff';
-        }
-      }}
-    >
-      <span style={{ fontWeight: 600 }}>{label}</span>
-      {sub && (
-        <span style={{ fontSize: '10px', color: disabled ? '#884444' : '#00ffcc', marginTop: '2px' }}>
-          {sub}
-        </span>
-      )}
-    </button>
-  );
+  const btnClass = "w-full max-w-[340px] text-left px-5 py-3 rounded transition-all duration-150 border font-mono tracking-wider flex flex-col justify-center my-1";
 
   return (
-    <div style={{
-      position: 'fixed',
-      inset: 0,
-      zIndex: 40,
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'center',
-      paddingLeft: '8vw',
-      fontFamily: 'monospace',
-      userSelect: 'none'
-    }}>
-      {/* Título */}
-      <div style={{ marginBottom: '24px' }}>
-        <h1 style={{
-          fontSize: '2.6rem',
-          letterSpacing: '6px',
-          margin: 0,
-          color: '#ffffff',
-          fontWeight: 700,
-          textShadow: '0 0 15px rgba(0,255,204,0.3)'
-        }}>
+    <div className="fixed inset-0 z-20 flex flex-col justify-center pl-8 md:pl-20 max-w-xl select-none">
+      {/* TÍTULO ORIGINAL */}
+      <div className="mb-6">
+        <h1 className="text-4xl md:text-5xl font-bold tracking-[0.25em] text-white drop-shadow-[0_0_20px_rgba(0,255,204,0.35)] font-mono">
           PROYECTO ABISMO
         </h1>
-        <p style={{
-          margin: '6px 0 0 0',
-          fontSize: '12px',
-          color: '#00ffcc',
-          letterSpacing: '3px'
-        }}>
+        <p className="text-xs tracking-[0.3em] text-cyan-400 font-mono mt-2">
           ESTACIÓN SUBMARINA NEXUS // -8,000M
         </p>
 
-        {/* Alias del Operario */}
+        {/* SUJETO / OPERARIO */}
         {setAlias && (
-          <div style={{ marginTop: '14px', fontSize: '12px', color: '#6688aa' }}>
-            SUJETO: {' '}
-            {editingAlias ? (
+          <div className="mt-3 text-xs text-slate-400 font-mono flex items-center gap-2">
+            <span>OPERARIO //</span>
+            {editing ? (
               <input
                 type="text"
                 maxLength={16}
@@ -158,29 +80,21 @@ export function MainMenu({
                 autoFocus
                 onBlur={(e) => {
                   setAlias(e.target.value.trim() || 'OPERARIO');
-                  setEditingAlias(false);
+                  setEditing(false);
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     setAlias((e.target as HTMLInputElement).value.trim() || 'OPERARIO');
-                    setEditingAlias(false);
+                    setEditing(false);
                   }
                 }}
-                style={{
-                  background: '#0a1018',
-                  border: '1px solid #00ffcc',
-                  color: '#fff',
-                  padding: '2px 6px',
-                  fontFamily: 'monospace',
-                  fontSize: '12px',
-                  outline: 'none'
-                }}
+                className="bg-black/80 border border-cyan-400 text-cyan-300 px-2 py-0.5 text-xs outline-none"
               />
             ) : (
               <span
-                onClick={() => setEditingAlias(true)}
-                style={{ color: '#00ffcc', cursor: 'pointer', textDecoration: 'underline' }}
-                title="Haz clic para cambiar nombre"
+                onClick={() => setEditing(true)}
+                className="text-cyan-300 hover:text-white cursor-pointer underline underline-offset-2"
+                title="Clic para editar"
               >
                 {alias} ✎
               </span>
@@ -189,145 +103,199 @@ export function MainMenu({
         )}
       </div>
 
-      {/* Lista de botones */}
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
-        {B('Nueva partida', onNew)}
-        {B('Continuar', onContinue, !hasSave, hasSave ? saveInfo : 'Sin partida guardada')}
-        {B('Multijugador', () => {}, true, '🔒 Bloqueado · Servidores NEXUS fuera de línea')}
-        {onChapters && B('Seleccionar capítulo', onChapters)}
-        {onSettings && B('Ajustes', onSettings)}
-        {onScores && B('Puntuaciones', onScores)}
-        {onCredits && B('Créditos', onCredits)}
-        {onExit && B('Salir', onExit)}
-      </div>
-    </div>
-  );
-}
-
-// --- SELECCIONAR CAPÍTULO ---
-export function ChapterSelect({ onClose, onPlay }: { onClose: () => void; onPlay: (ch: number) => void }) {
-  return (
-    <ModalPanel title="SELECCIONAR CAPÍTULO" onClose={onClose}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '15px' }}>
+      {/* BOTONES DE ACCIÓN */}
+      <div className="flex flex-col">
+        {/* Nueva Partida */}
         <button
           type="button"
-          onClick={() => onPlay(1)}
-          style={panelBtnStyle}
+          onClick={onNew}
+          className={`${btnClass} bg-slate-900/80 hover:bg-cyan-500/15 border-cyan-500/30 hover:border-cyan-400 text-slate-100 hover:text-white`}
         >
-          <div style={{ fontWeight: 'bold', color: '#00ffcc' }}>CAPÍTULO 1: LA ENTRADA</div>
-          <div style={{ fontSize: '11px', color: '#8899aa', marginTop: '4px' }}>
-            Acceso a la compuerta B-01 tras el colapso del transporte.
-          </div>
+          <span className="text-sm font-semibold">NUEVA PARTIDA</span>
         </button>
 
+        {/* Continuar */}
+        <button
+          type="button"
+          disabled={!hasSave}
+          onClick={hasSave ? onContinue : undefined}
+          className={`${btnClass} ${
+            hasSave
+              ? 'bg-slate-900/80 hover:bg-cyan-500/15 border-cyan-500/30 hover:border-cyan-400 text-slate-100'
+              : 'bg-black/30 border-white/5 text-slate-600 cursor-not-allowed'
+          }`}
+        >
+          <span className="text-sm font-semibold">CONTINUAR</span>
+          {hasSave && (
+            <span className="text-[10px] text-cyan-400 tracking-normal mt-0.5">
+              {saveInfo || 'Punto de control guardado'}
+            </span>
+          )}
+        </button>
+
+        {/* Multijugador (Bloqueado) */}
         <button
           type="button"
           disabled
-          style={{ ...panelBtnStyle, opacity: 0.5, cursor: 'not-allowed' }}
+          className={`${btnClass} bg-black/40 border-white/5 opacity-60 cursor-not-allowed`}
         >
-          <div style={{ fontWeight: 'bold', color: '#667788' }}>CAPÍTULO 2: NIVEL SUMERGIDO 🔒</div>
-          <div style={{ fontSize: '11px', color: '#556677', marginTop: '4px' }}>
-            Requiere completar el Capítulo 1.
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-slate-500">MULTIJUGADOR</span>
+            <span className="text-xs">🔒</span>
           </div>
+          <span className="text-[10px] text-rose-500 tracking-normal mt-0.5">
+            Servidores NEXUS fuera de línea
+          </span>
+        </button>
+
+        {/* Seleccionar Capítulo */}
+        <button
+          type="button"
+          onClick={onChapters}
+          className={`${btnClass} bg-slate-900/80 hover:bg-cyan-500/15 border-cyan-500/30 hover:border-cyan-400 text-slate-100`}
+        >
+          <span className="text-sm font-semibold">SELECCIONAR CAPÍTULO</span>
+        </button>
+
+        {/* Ajustes */}
+        <button
+          type="button"
+          onClick={onSettings}
+          className={`${btnClass} bg-slate-900/80 hover:bg-cyan-500/15 border-cyan-500/30 hover:border-cyan-400 text-slate-100`}
+        >
+          <span className="text-sm font-semibold">AJUSTES</span>
+        </button>
+
+        {/* Puntuaciones */}
+        <button
+          type="button"
+          onClick={onScores}
+          className={`${btnClass} bg-slate-900/80 hover:bg-cyan-500/15 border-cyan-500/30 hover:border-cyan-400 text-slate-100`}
+        >
+          <span className="text-sm font-semibold">PUNTUACIONES</span>
+        </button>
+
+        {/* Créditos */}
+        <button
+          type="button"
+          onClick={onCredits}
+          className={`${btnClass} bg-slate-900/80 hover:bg-cyan-500/15 border-cyan-500/30 hover:border-cyan-400 text-slate-100`}
+        >
+          <span className="text-sm font-semibold">CRÉDITOS</span>
+        </button>
+
+        {/* Salir */}
+        <button
+          type="button"
+          onClick={onExit}
+          className={`${btnClass} bg-slate-900/80 hover:bg-red-500/15 border-white/10 hover:border-rose-400 text-slate-400 hover:text-white`}
+        >
+          <span className="text-sm font-semibold">SALIR</span>
         </button>
       </div>
-    </ModalPanel>
-  );
-}
-
-// --- AJUSTES ---
-export function SettingsPanel({ s, onChange, onClose }: { s: any; onChange: (s: any) => void; onClose: () => void }) {
-  return (
-    <ModalPanel title="AJUSTES DEL SISTEMA" onClose={onClose}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '15px', fontSize: '13px' }}>
-        <SettingSlider
-          label="Volumen General"
-          value={s?.master ?? 0.8}
-          onChange={(v) => onChange({ ...s, master: v })}
-        />
-        <SettingSlider
-          label="Música"
-          value={s?.music ?? 0.7}
-          onChange={(v) => onChange({ ...s, music: v })}
-        />
-        <SettingSlider
-          label="Efectos de Sonido"
-          value={s?.sfx ?? 0.8}
-          onChange={(v) => onChange({ ...s, sfx: v })}
-        />
-        <SettingSlider
-          label="Ambiente"
-          value={s?.ambience ?? 0.75}
-          onChange={(v) => onChange({ ...s, ambience: v })}
-        />
-      </div>
-    </ModalPanel>
-  );
-}
-
-// --- PUNTUACIONES ---
-export function Scores({ onClose }: { onClose: () => void }) {
-  return (
-    <ModalPanel title="REGISTRO DE INMERSIONES" onClose={onClose}>
-      <div style={{ marginTop: '15px', color: '#8899aa', fontSize: '12px', textAlign: 'center', padding: '20px 0' }}>
-        No hay registros disponibles en el archivo local.
-      </div>
-    </ModalPanel>
-  );
-}
-
-// --- CRÉDITOS ---
-export function Credits({ onClose }: { onClose: () => void }) {
-  return (
-    <ModalPanel title="CRÉDITOS" onClose={onClose}>
-      <div style={{ marginTop: '15px', fontSize: '13px', lineHeight: '1.8', color: '#ccddee' }}>
-        <p><strong style={{ color: '#00ffcc' }}>PROYECTO ABISMO</strong></p>
-        <p>Experiencia de terror subacuático y supervivencia sci-fi en la Fosa de las Marianas.</p>
-        <p style={{ marginTop: '10px', color: '#778899', fontSize: '11px' }}>
-          Desarrollado para Cloudflare Pages Edition.
-        </p>
-      </div>
-    </ModalPanel>
-  );
-}
-
-// --- SALIDA / DESPEDIDA ---
-export function Farewell({ onBack }: { onBack: () => void }) {
-  return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 60,
-      background: '#020408', display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center', fontFamily: 'monospace', color: '#fff'
-    }}>
-      <h2 style={{ color: '#00ffcc', letterSpacing: '3px' }}>SESIÓN CERRADA</h2>
-      <p style={{ color: '#667788', margin: '15px 0 25px 0', fontSize: '13px' }}>
-        Puedes cerrar esta pestaña del navegador de forma segura.
-      </p>
-      <button type="button" onClick={onBack} style={panelBtnStyle}>VOLVER AL MENÚ</button>
     </div>
   );
 }
 
-// Auxiliares de UI
-function ModalPanel({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+// --- SUBPANEL: SELECCIONAR CAPÍTULO ---
+export function ChapterSelect({ onClose, onPlay }: { onClose: () => void; onPlay: (n: number) => void }) {
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 60,
-      background: 'rgba(2, 6, 12, 0.85)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontFamily: 'monospace', padding: '20px'
-    }}>
-      <div style={{
-        background: '#060d16', border: '1px solid #1c3048',
-        width: '100%', maxWidth: '480px', padding: '24px', borderRadius: '4px'
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #142436', paddingBottom: '10px' }}>
-          <h3 style={{ margin: 0, color: '#e0f0ff', fontSize: '15px', letterSpacing: '2px' }}>{title}</h3>
-          <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', color: '#8899aa', fontSize: '18px', cursor: 'pointer' }}>✕</button>
+    <Modal title="SELECCIÓN DE CAPÍTULO" onClose={onClose}>
+      <div className="flex flex-col gap-3 mt-4">
+        <button
+          type="button"
+          onClick={() => onPlay(1)}
+          className="text-left p-3 rounded bg-slate-900/90 border border-cyan-500/40 hover:border-cyan-400 transition"
+        >
+          <div className="text-cyan-300 font-bold text-sm">CAPÍTULO 1: LA ENTRADA</div>
+          <div className="text-slate-400 text-xs mt-1">
+            Compuerta exterior NEXUS B-01 tras el descenso.
+          </div>
+        </button>
+        <button
+          type="button"
+          disabled
+          className="text-left p-3 rounded bg-black/40 border border-white/5 opacity-50 cursor-not-allowed"
+        >
+          <div className="text-slate-500 font-bold text-sm">CAPÍTULO 2: SECTOR SUMERGIDO 🔒</div>
+          <div className="text-slate-600 text-xs mt-1">Completa el capítulo anterior para desbloquear.</div>
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+// --- SUBPANEL: AJUSTES ---
+export function SettingsPanel({ s, onChange, onClose }: { s: Settings; onChange: (s: Settings) => void; onClose: () => void }) {
+  return (
+    <Modal title="AJUSTES DEL SISTEMA" onClose={onClose}>
+      <div className="flex flex-col gap-4 mt-4 font-mono text-xs">
+        <Slider label="Master" value={s.master ?? 0.8} onChange={(v) => onChange({ ...s, master: v })} />
+        <Slider label="Música" value={s.music ?? 0.7} onChange={(v) => onChange({ ...s, music: v })} />
+        <Slider label="Efectos (SFX)" value={s.sfx ?? 0.8} onChange={(v) => onChange({ ...s, sfx: v })} />
+        <Slider label="Ambiente" value={s.ambience ?? 0.75} onChange={(v) => onChange({ ...s, ambience: v })} />
+      </div>
+    </Modal>
+  );
+}
+
+// --- SUBPANEL: PUNTUACIONES ---
+export function Scores({ onClose }: { onClose: () => void }) {
+  return (
+    <Modal title="REGISTRO DE INMERSIONES" onClose={onClose}>
+      <div className="py-8 text-center text-slate-500 font-mono text-xs">
+        Sin inmersiones registradas en la memoria local.
+      </div>
+    </Modal>
+  );
+}
+
+// --- SUBPANEL: CRÉDITOS ---
+export function Credits({ onClose }: { onClose: () => void }) {
+  return (
+    <Modal title="CRÉDITOS" onClose={onClose}>
+      <div className="mt-4 font-mono text-xs text-slate-300 leading-relaxed space-y-2">
+        <p className="text-cyan-400 font-bold">PROYECTO ABISMO</p>
+        <p>Experiencia de terror subacuático y supervivencia sci-fi en la Fosa de las Marianas.</p>
+        <p className="text-slate-500 text-[11px] pt-2">Cloudflare Pages Edition</p>
+      </div>
+    </Modal>
+  );
+}
+
+// --- SUBPANEL: SALIDA ---
+export function Farewell({ onBack }: { onBack: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black font-mono text-white p-6">
+      <h2 className="text-2xl font-bold tracking-widest text-cyan-400">SESIÓN CERRADA</h2>
+      <p className="text-slate-500 text-xs mt-2 mb-6">Puedes cerrar esta ventana de forma segura.</p>
+      <button
+        type="button"
+        onClick={onBack}
+        className="px-6 py-2 border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/20 text-xs tracking-wider"
+      >
+        VOLVER AL MENÚ
+      </button>
+    </div>
+  );
+}
+
+// Componentes modales auxiliares
+function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+      <div className="w-full max-w-md bg-slate-950 border border-slate-800 p-6 rounded shadow-2xl font-mono">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <h3 className="text-sm font-bold text-white tracking-widest">{title}</h3>
+          <button type="button" onClick={onClose} className="text-slate-500 hover:text-white text-lg">✕</button>
         </div>
         {children}
-        <div style={{ marginTop: '24px', textAlign: 'right' }}>
-          <button type="button" onClick={onClose} style={{ ...panelBtnStyle, width: 'auto', padding: '6px 16px', fontSize: '12px' }}>
+        <div className="mt-6 text-right">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-1.5 text-xs text-slate-300 bg-slate-900 border border-slate-700 hover:border-cyan-400"
+          >
             VOLVER
           </button>
         </div>
@@ -336,10 +304,10 @@ function ModalPanel({ title, children, onClose }: { title: string; children: Rea
   );
 }
 
-function SettingSlider({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+function Slider({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#a0b4c8', marginBottom: '4px' }}>
+      <div className="flex justify-between text-slate-400 mb-1">
         <span>{label}</span>
         <span>{Math.round(value * 100)}%</span>
       </div>
@@ -350,20 +318,8 @@ function SettingSlider({ label, value, onChange }: { label: string; value: numbe
         step={0.05}
         value={value}
         onChange={(e) => onChange(parseFloat(e.target.value))}
-        style={{ width: '100%', accentColor: '#00ffcc', cursor: 'pointer' }}
+        className="w-full accent-cyan-400 cursor-pointer"
       />
     </div>
   );
 }
-
-const panelBtnStyle: CSSProperties = {
-  background: 'rgba(12, 22, 34, 0.8)',
-  border: '1px solid #1c3048',
-  color: '#e0f0ff',
-  padding: '10px 14px',
-  fontFamily: 'monospace',
-  textAlign: 'left',
-  cursor: 'pointer',
-  borderRadius: '2px',
-  width: '100%'
-};
