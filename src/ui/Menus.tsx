@@ -1,6 +1,26 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
 
-// --- FONDO AMBIENTAL DEL MENÚ (Sin clases raras de Tailwind para no romper Vite) ---
+// --- FUNCIONES DE FORMATEO (Requeridas por Hud.tsx) ---
+export function fmtTime(sec: number): string {
+  if (typeof sec !== 'number' || isNaN(sec)) return '00:00';
+  let s = Math.max(0, Math.floor(sec));
+  // Por si el tiempo viene en milisegundos
+  if (s > 100000) s = Math.floor(s / 1000);
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  const h = Math.floor(m / 60);
+  const rm = m % 60;
+  if (h > 0) {
+    return `${h}:${rm.toString().padStart(2, '0')}:${r.toString().padStart(2, '0')}`;
+  }
+  return `${rm.toString().padStart(2, '0')}:${r.toString().padStart(2, '0')}`;
+}
+
+export function fmtScore(n: number): string {
+  return (n || 0).toLocaleString('es-ES');
+}
+
+// --- FONDO DEL MENÚ ---
 export function MenuBackdrop() {
   return (
     <div
