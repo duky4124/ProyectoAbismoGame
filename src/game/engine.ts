@@ -1,3 +1,4 @@
+typescript
 import * as THREE from 'three';
 import { audio } from './audio';
 import { buildMaterials, softCircle, type Mats } from './textures';
@@ -5,7 +6,6 @@ import { CELL, Door, World } from './world';
 import { Observer } from './observer';
 import { DEFAULT_SETTINGS, DOCS, ITEMS, RECIPES, writeSave, type SaveData, type Settings } from './data';
 import { buildChapter1, type ChapterRuntime } from './chapter1';
-
 export { audio };
 
 export interface HideSpot { id: string; x: number; z: number; yaw: number; eye: number; type: 'locker' | 'desk' | 'crate'; exit: { x: number; z: number } }
@@ -60,13 +60,11 @@ class PointPool {
 interface Emitter { x: number; y: number; z: number; kind: 'spark' | 'steam' | 'smoke'; rate: number; acc: number }
 interface Trigger { x0: number; y0: number; x1: number; y1: number; fn: () => void; once: boolean; fired: boolean; inside: boolean }
 interface Proj { mesh: THREE.Mesh; vx: number; vy: number; vz: number; landed: boolean; t: number; beepT: number; mat: THREE.MeshBasicMaterial }
-
 const SAVE_SLOTS = 10;
 
 export class Game {
   static inst: Game | null = null;
   static get(canvas: HTMLCanvasElement): Game { if (!Game.inst) Game.inst = new Game(canvas); return Game.inst; }
-
   canvas: HTMLCanvasElement;
   renderer: THREE.WebGLRenderer;
   scene = new THREE.Scene();
@@ -173,7 +171,6 @@ export class Game {
   // ---------- eventos ----------
   on(ev: GameEvent, fn: (d: any) => void) { let s = this.listeners.get(ev); if (!s) this.listeners.set(ev, (s = new Set())); s.add(fn as (d: unknown) => void); return () => { s!.delete(fn as (d: unknown) => void); }; }
   emit(ev: GameEvent, d?: unknown) { this.listeners.get(ev)?.forEach((f) => f(d)); }
-
   applySettings(s: Settings) {
     this.settings = s;
     audio.setVolumes({ master: s.master, music: s.music, sfx: s.sfx, ambience: s.ambience });
@@ -206,12 +203,12 @@ export class Game {
     this.chaseAwarded = false; this.enemyAge = 0; this.ambientT = 15;
     this.objectiveFn = () => '';
     audio.alarm(false);
-
     const q = this.settings.quality;
     this.scene.background = new THREE.Color(0x020304);
     this.scene.fog = new THREE.FogExp2(0x030405, q === 'bajo' ? 0.07 : 0.052);
     this.hemi = new THREE.HemisphereLight(0x8899aa, 0x221a14, 0.1 + this.settings.brightness * 1.2);
     this.level.add(this.hemi);
+
     // linterna
     if (this.flash) this.camera.remove(this.flash);
     this.flash = new THREE.SpotLight(0xfff1d6, 0, 34, 0.5, 0.55, 1.6);
@@ -223,21 +220,23 @@ export class Game {
     this.flashTarget.position.set(0, 0, -5); this.flash.target = this.flashTarget; this.flash.position.set(0.15, -0.12, 0);
     const n = q === 'bajo' ? 3 : q === 'medio' ? 5 : 7;
     for (let i = 0; i < n; i++) { const l = new THREE.PointLight(0xffffff, 0, 10, 2); this.pool.push(l); this.level.add(l); }
-
+    
+    // Inicialización del mundo y entidades
     this.enemy = new Observer(this);
+    this.world = new World();
     const built = buildChapter1(this);
     this.rt = built;
     this.world.finalize(this.mats, q !== 'bajo');
     this.level.add(this.world.group);
-    if (save) for (const [id, st] of Object.entries(save.doors)) { const d = this.world.doorList.find((x) => x.id === id); if (d) { d.open = st.open; d.locked = st.locked; d.t = st.open ? 1 : 0; this.world.updateDoor(d); } }
 
+    if (save) for (const [id, st] of Object.entries(save.doors)) { const d = this.world.doorList.find((x) => x.id === id); if (d) { d.open = st.open; d.locked = st.locked; d.t = st.open ? 1 : 0; this.world.updateDoor(d); } }
     const P = this.P;
     P.hidden = null; P.vy = 0; P.y = 0; P.crouch = false; P.vx = P.vz = 0; P.speed = 0; P.exhausted = false; P.running = false;
     if (save) {
       P.x = save.px; P.z = save.pz; P.yaw = save.yaw; P.health = save.health; P.stamina = save.stamina; P.hunger = save.hunger; P.thirst = save.thirst;
       P.battery = save.battery; P.hasLight = save.hasLight;
     } else {
-      P.x = built.start.x; P.z = built.start.z; P.yaw = built.start.yaw; P.health = 100; P.stamina = 100; P.hunger = 85; P.thirst = 80; P.battery = 70; P.hasLight = false;
+      P.x = built ? built.start.x : 0; P.z = built ? built.start.z : 0; P.yaw = built ? built.start.yaw : 0; P.health = 100; P.stamina = 100; P.hunger = 85; P.thirst = 80; P.battery = 70; P.hasLight = false;
     }
     P.flashOn = false; P.pitch = 0; P.eye = 1.65;
     this.checkpointSave = save ? save : null;
@@ -246,7 +245,9 @@ export class Game {
     this.applySettings(this.settings);
     this.hud = this.makeHud();
     this.zoneName = '';
-    built.start.run(!!save);
+    if (built && built.start && typeof built.start.run === 'function') {
+      built.start.run(!!save);
+    }
     if (!save) this.checkpoint('Inicio del capítulo', true);
     this.emit('inventory'); this.emit('chapter', { n: chapter });
     this.emit('modal', 'none');
@@ -255,7 +256,6 @@ export class Game {
   // ---------- bucle ----------
   start() { if (this.running) return; this.running = true; this.last = performance.now(); const loop = (now: number) => { if (!this.running) return; this.raf = requestAnimationFrame(loop); const dt = Math.min(0.05, (now - this.last) / 1000); this.last = now; this.frame(dt); }; this.raf = requestAnimationFrame(loop); }
   stop() { this.running = false; cancelAnimationFrame(this.raf); }
-
   setModal(m: Modal) {
     const prev = this.modal; this.modal = m;
     this.paused = m === 'pause' || m === 'doc' || m === 'keypad' || m === 'choice' || (m === 'inventory' && this.settings.pauseInv) || !this.loaded;
@@ -266,7 +266,6 @@ export class Game {
   }
   requestLock() { if (this.isTouch) return; try { const p = this.canvas.requestPointerLock() as unknown; if (p && typeof (p as Promise<void>).catch === 'function') (p as Promise<void>).catch(() => undefined); } catch { /* */ } }
   resumeGame() { this.setModal('none'); audio.resume(); this.last = performance.now(); }
-
   private frame(dt: number) {
     if (!this.loaded) return;
     if (!this.paused) this.update(dt);
@@ -311,6 +310,7 @@ export class Game {
     });
     window.addEventListener('resize', () => this.resize());
   }
+
   touchPress(a: 'interact' | 'jump' | 'flash' | 'crouch' | 'inv' | 'throw' | 'heal' | 'pause' | 'run') {
     if (!this.loaded || this.state !== 'playing') return;
     if (a === 'inv') { this.setModal(this.modal === 'inventory' ? 'none' : 'inventory'); return; }
@@ -340,7 +340,6 @@ export class Game {
   }
   onEnemyAlert() { this.stats.chases++; this.chaseAwarded = false; this.hint('chase', 'Te persigue. Corre, rompe la línea de visión y escóndete (E) antes de que te vea entrar.'); }
   onEnemyLost() { if (!this.chaseAwarded) { this.chaseAwarded = true; this.addScore(500, 'PERSECUCIÓN SUPERADA'); this.toast('Lo has perdido… por ahora.', 'good'); } }
-
   worldCell(cx: number, cy: number) { return { x: (cx + 0.5) * CELL, z: (cy + 0.5) * CELL }; }
 
   // ---------- inventario ----------
@@ -478,12 +477,11 @@ export class Game {
   addInteract(i: Interact) { this.interacts.push(i); return i; }
   addTrigger(x0: number, y0: number, x1: number, y1: number, fn: () => void, once = true) { this.triggers.push({ x0, y0, x1, y1, fn, once, fired: false, inside: false }); }
   addEmitter(e: Omit<Emitter, 'acc'>) { this.emitters.push({ ...e, acc: 0 }); }
-
   makeDoor(o: { id: string; cx: number; cy: number; kind?: 'steel' | 'office' | 'secret'; heavy?: boolean; locked?: boolean; name?: string; check?: () => true | string | null; open?: boolean }) {
     const d = new Door(o.id, o.cx, o.cy, o.kind || 'steel', o.heavy ?? o.kind !== 'office');
     d.locked = !!o.locked; d.open = !!o.open; d.t = d.open ? 1 : 0;
     this.world.addDoor(d, this.mats);
-    this.level.add(d.group); // las puertas viven en world.group; reordenar abajo
+    this.level.add(d.group);
     this.interacts.push({
       id: 'door_' + o.id, x: d.x, y: 1.3, z: d.z, reach: 2.9, noLos: true, cone: 0.5,
       label: () => (d.kind === 'secret' && d.locked ? null : d.open ? 'Cerrar puerta' : d.locked ? `${o.name || 'Puerta'} (bloqueada)` : 'Abrir puerta'),
@@ -503,7 +501,6 @@ export class Game {
   unlockDoor(d: Door, open: boolean) { d.locked = false; this.world.updateDoor(d); if (open) { d.open = true; audio.doorSlide({ x: d.x, y: 1.5, z: d.z }, d.heavy); this.makeNoise(d.x, d.z, 10); } }
   toggleDoor(d: Door) {
     if (!d.open) {
-      // no cerrar con el jugador dentro
       d.open = true;
     } else {
       if (Math.hypot(this.P.x - d.x, this.P.z - d.z) < 1.4) { this.toast('Estás en medio.', 'warn'); return; }
@@ -511,7 +508,6 @@ export class Game {
     }
     audio.doorSlide({ x: d.x, y: 1.5, z: d.z }, d.heavy); this.makeNoise(d.x, d.z, d.heavy ? 11 : 8);
   }
-
   addLight(o: { x: number; y: number; z: number; em?: LightDef; main?: LightDef; flicker?: LightSrc['flicker']; fixture?: 'tube' | 'bulb' | 'alarm' | 'none'; rot?: boolean; alarm?: boolean; expire?: number }) {
     const l: LightSrc = { x: o.x, y: o.y, z: o.z, em: o.em, main: o.main, flicker: o.flicker || 'none', alarm: o.alarm, phase: Math.random() * 100, burst: 0, expire: o.expire, cur: { c: 0, i: 0, r: 8 }, mult: 1 };
     const fx = o.fixture ?? 'tube';
@@ -534,9 +530,7 @@ export class Game {
     this.after(120, () => this.level.remove(m));
     audio.click(); this.toast('Barra luminosa activada', 'good');
   }
-
   dustBurst(n: number) { const P = this.P; for (let i = 0; i < n; i++) this.steam.emit(P.x + (Math.random() - 0.5) * 8, 3.3, P.z + (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 0.5, -0.9 - Math.random(), (Math.random() - 0.5) * 0.5, 2.2, 0.3, 0.3, 0.3); }
-
   throwNoisemaker() {
     if (!this.has('noisemaker')) { this.toast('No tienes distractores. Fabrícalos: lata + cable.', 'warn'); return; }
     if (this.state !== 'playing' || this.P.hidden || this.modal !== 'none') return;
@@ -547,7 +541,6 @@ export class Game {
     this.projs.push({ mesh, vx: this.fwd.x * 11, vy: this.fwd.y * 11 + 2.5, vz: this.fwd.z * 11, landed: false, t: 0, beepT: 0, mat });
     audio.throwSfx(); this.hint('throw', 'Los distractores atraen a las criaturas hacia el sonido. Úsalos para despejar el camino.');
   }
-
   toggleFlash() {
     const P = this.P;
     if (!P.hasLight) { this.toast('No tienes linterna.', 'warn'); return; }
@@ -556,10 +549,8 @@ export class Game {
   }
   toggleCrouch() { if (this.P.hidden) return; if (this.P.crouch && this.world.crouchCell[this.world.idx(Math.floor(this.P.x / CELL), Math.floor(this.P.z / CELL))]) return; this.P.crouch = !this.P.crouch; }
   jump() { const P = this.P; if (!P.onGround || P.hidden || P.stamina < 8 || P.crouch) return; P.vy = 4.1; P.onGround = false; P.stamina -= 8; P.regenDelay = 0.8; audio.jump(); this.makeNoise(P.x, P.z, 6); }
-
   hide(h: HideSpot) {
     const P = this.P;
-    // ¿lo ven entrar?
     this.hideSeen = this.enemy.active && this.enemy.hasLOS && Math.hypot(this.enemy.x - P.x, this.enemy.z - P.z) < 17 && (this.enemy.chasing || this.enemy.state === 'watch');
     P.hidden = h; P.x = h.x; P.z = h.z; P.crouch = false; P.speed = 0; P.vx = P.vz = 0;
     P.yaw = h.yaw; P.pitch = 0; this.stats.hides++;
@@ -577,7 +568,6 @@ export class Game {
     const dx = P.x - en.x, dz = P.z - en.z, d = Math.hypot(dx, dz) || 1; P.x += (dx / d) * 1.0; P.z += (dz / d) * 1.0; this.world.resolve(P, 0.32);
     this.shake(1, 0.6); en.state = 'chase';
   }
-
   damage(n: number, sx: number, sz: number) {
     if (this.state !== 'playing') return;
     const P = this.P;
@@ -621,7 +611,6 @@ export class Game {
   resolveChoice(i: number) {
     if (!this.choiceCfg) return; const c = this.choiceCfg; this.choiceCfg = null; this.setFlag(c.opts[i].flag); this.setModal('none'); audio.click(); c.done?.();
   }
-
   complete(extra: { title: string; text: string }) {
     if (this.state !== 'playing') return;
     this.state = 'done';
@@ -658,7 +647,6 @@ export class Game {
   }
 
   // ---------- spawn de enemigo ----------
-  /** Selecciona un punto de aparición variable según distancia y visibilidad */
   pickSpawn(minD: number, maxD: number, needLOS: boolean | null): { x: number; z: number } | null {
     const w = this.world, P = this.P;
     const pc = { x: Math.floor(P.x / CELL), y: Math.floor(P.z / CELL) };
@@ -695,7 +683,6 @@ export class Game {
       noise: Math.min(1, P.noise / 16), hasLight: P.hasLight, slots: this.inv.length, chase: this.lastDanger === 2 ? 1 : 0, tension: this.nearHideTension, peek: !!P.hidden, deaths: this.deaths,
     };
   }
-
   private update(dt: number) {
     const P = this.P, w = this.world, s = this.settings;
     if (this.state === 'dead') { this.deathT += dt; this.cameraUpdate(dt); this.hud = this.snapshot(); this.emit('hud', this.hud); this.particlesAndLights(dt); return; }
@@ -703,10 +690,8 @@ export class Game {
     this.time += dt;
     this.hurt = Math.max(0, this.hurt - dt * 0.8);
     P.noise = Math.max(0, P.noise - dt * 12);
-
     // timers
     for (let i = this.timers.length - 1; i >= 0; i--) { const t = this.timers[i]; t.t -= dt; if (t.t <= 0) { this.timers.splice(i, 1); t.fn(); } }
-
     // ----- movimiento -----
     const k = this.keys;
     let mx = this.input.moveX, my = this.input.moveY;
@@ -720,7 +705,6 @@ export class Game {
     this.input.lookX = this.input.lookY = 0;
     P.pitch = Math.max(-1.45, Math.min(1.45, P.pitch));
     if (P.hidden) { const dy = Math.atan2(Math.sin(P.yaw - P.hidden.yaw), Math.cos(P.yaw - P.hidden.yaw)); if (Math.abs(dy) > 0.9) P.yaw = P.hidden.yaw + Math.sign(dy) * 0.9; P.pitch = Math.max(-0.5, Math.min(0.5, P.pitch)); }
-
     const inDuct = !!w.crouchCell[w.idx(Math.floor(P.x / CELL), Math.floor(P.z / CELL))];
     if (inDuct) P.crouch = true;
     if (!s.toggleCrouch) P.crouch = k.has('KeyC') || k.has('ControlLeft') || this.input.crouchHold || inDuct;
@@ -753,7 +737,6 @@ export class Game {
         this.makeNoise(P.x, P.z, P.running ? 15 : P.crouch ? 2.5 : 7);
       }
     }
-
     // ----- estadísticas vitales -----
     P.hunger = Math.max(0, P.hunger - dt * 0.06); P.thirst = Math.max(0, P.thirst - dt * 0.085);
     if (P.hunger <= 0 || P.thirst <= 0) { P.health -= dt * 0.9; if (P.health <= 0) this.die(); }
@@ -769,7 +752,6 @@ export class Game {
     const inten = Math.max(this.lastDanger === 2 ? 1 : this.lastDanger === 1 ? 0.5 : 0, P.health < 35 ? 1 : 0, this.nearHideTension);
     this.heartT -= dt;
     if (this.heartT <= 0 && inten > 0.25) { audio.heart(inten); this.heartT = 1.0 - inten * 0.45; this.shake(0.05 * inten, 0.1); }
-
     // ----- sistemas -----
     this.world.tickDoors(dt);
     this.findBest();
@@ -782,25 +764,20 @@ export class Game {
     this.ambient(dt);
     this.rt?.update?.(dt);
     this.particlesAndLights(dt);
-
     // zona
     const room = w.roomAt(P.x, P.z);
     if (room && room.name !== this.zoneName && !room.silent) { this.zoneName = room.name; this.emit('zone', room.name); }
-
     // peligro/música
     const danger = this.enemy.active ? Math.max(0, this.enemy.threat) : 0;
     const dl = (danger >= 2 ? 2 : danger >= 1 ? 1 : 0) as 0 | 1 | 2;
     if (dl !== this.lastDanger) { this.lastDanger = dl; audio.setDanger(dl); }
     if (this.enemy.active && Math.hypot(this.enemy.x - P.x, this.enemy.z - P.z) > 40 && this.enemy.threat < 1) audio.enemyBedUpdate(null, 0);
     if (!this.enemy.active) audio.enemyBedUpdate(null, 0);
-
     this.cameraUpdate(dt);
     audio.setListener({ x: P.x, y: P.y + P.eye, z: P.z }, P.yaw);
-
     this.hudT -= dt;
     if (this.hudT <= 0) { this.hudT = 0.1; this.hud = this.snapshot(); this.emit('hud', this.hud); }
   }
-
   private cameraUpdate(dt: number) {
     const P = this.P, c = this.camera;
     let ox = 0, oy = 0, roll = 0;
@@ -826,11 +803,9 @@ export class Game {
         if (this.settings.reduceFlash && P.battery < 15) inten = 300 * 0.5;
       }
       f.intensity = inten;
-      // ligero retraso al apuntar
       this.flashTarget.position.set(0, 0, -5);
     }
   }
-
   private updateLightLevel(dt: number) {
     const P = this.P; let l = 0;
     if (P.flashOn && P.battery > 0) l = 1;
@@ -840,7 +815,6 @@ export class Game {
     }
     this.lightLevel += (l - this.lightLevel) * Math.min(1, dt * 4);
   }
-
   private particlesAndLights(dt: number) {
     const P = this.P;
     // luces
@@ -891,7 +865,6 @@ export class Game {
     }
     d.update(dt);
   }
-
   private updateProjectiles(dt: number) {
     for (let i = this.projs.length - 1; i >= 0; i--) {
       const p = this.projs[i]; p.t += dt;
@@ -909,7 +882,6 @@ export class Game {
       }
     }
   }
-
   private updateDialog(dt: number) {
     const c = this.dialogCur;
     if (c) {
@@ -925,7 +897,6 @@ export class Game {
     }
   }
   get talking() { return !!this.dialogCur || this.dialog.length > 0; }
-
   private updateTriggers() {
     const P = this.P; const cx = P.x / CELL, cy = P.z / CELL;
     for (const t of this.triggers) {
@@ -934,25 +905,21 @@ export class Game {
       t.inside = inside;
     }
   }
-
   private director(dt: number) {
     if (!this.directorOn) return;
     const e = this.enemy;
     if (e.active) {
-      // retirada de patrullas largas lejos del jugador
       if (e.state === 'patrol' && this.enemyAge > 80 && !e.hasLOS && Math.hypot(e.x - this.P.x, e.z - this.P.z) > 25) { e.despawn(); this.directorT = this.directorGap[0] + Math.random() * (this.directorGap[1] - this.directorGap[0]); }
       return;
     }
     this.directorT -= dt;
     if (this.directorT > 0) return;
     this.directorT = this.directorGap[0] + Math.random() * (this.directorGap[1] - this.directorGap[0]);
-    // la aparición varía: observa a distancia, patrulla fuera de vista o aparece por un flanco
     const r = Math.random();
     if (r < 0.45) this.spawnEnemy('watch', { minD: 16, maxD: 40, los: true });
     else if (r < 0.85) this.spawnEnemy('patrol', { minD: 28, maxD: 80, los: false });
     else this.spawnEnemy('investigate', { minD: 22, maxD: 60, los: false });
   }
-
   private ambient(dt: number) {
     this.ambientT -= dt;
     if (this.ambientT > 0) return;
@@ -961,14 +928,12 @@ export class Game {
     if (r < 0.5) audio.distant();
     else if (r < 0.65) { this.shake(0.15, 0.4); audio.rumble(); for (let i = 0; i < 12; i++) this.steam.emit(P.x + (Math.random() - 0.5) * 6, 3.2, P.z + (Math.random() - 0.5) * 6, 0, -0.4, 0, 2, 0.2, 0.2, 0.2); }
     else if (r < 0.8) {
-      // una puerta se abre sola
       const cands = this.world.doorList.filter((d) => !d.open && !d.locked && d.kind !== 'secret' && Math.hypot(d.x - P.x, d.z - P.z) > 7 && Math.hypot(d.x - P.x, d.z - P.z) < 26);
       if (cands.length) { const d = cands[Math.floor(Math.random() * cands.length)]; d.open = true; audio.doorSlide({ x: d.x, y: 1.5, z: d.z }, d.heavy); }
       else audio.distant(2);
     } else if (r < 0.92) { const l = this.lights.filter((x) => x.flicker !== 'none' || !!x.main); const x = l[Math.floor(Math.random() * l.length)]; if (x) x.burst = 1.2; audio.spark({ x: x?.x || P.x, y: 3, z: x?.z || P.z }); }
     else audio.distant(3);
   }
-
   quitToMenu() {
     this.loaded = false; this.paused = true; this.modal = 'none'; this.state = 'playing';
     audio.alarm(false); audio.enemyBedUpdate(null, 0); audio.setDanger(0); audio.menuMode(true);
@@ -984,5 +949,4 @@ export class Game {
     this.setModal('none'); this.fade = 1; this.fadeTarget = 0; this.fadeSpeed = 1.6;
   }
 }
-
 export { SAVE_SLOTS };
