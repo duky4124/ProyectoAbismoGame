@@ -10,7 +10,7 @@ export function fmtTime(s: number) {
 }
 
 // ============================================================================
-// COMPONENTE 3D: RENDERIZA TU MODELO GLB EN EL MENÚ
+// COMPONENTE 3D: RENDERIZA AL MONSTRUO ESCALADO Y CENTRADO EN EL MENÚ
 // ============================================================================
 function ObserverMenu3D() {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -21,23 +21,24 @@ function ObserverMenu3D() {
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(40, container.clientWidth / container.clientHeight, 0.1, 50);
-    camera.position.set(0, 1.4, 4.2);
+    // Posicionamos la cámara para ver al monstruo de cuerpo casi entero
+    camera.position.set(0, 1.3, 4.2);
 
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(renderer.domElement);
 
-    // Luces para que el modelo se integre con la niebla roja/azul del fondo
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    // Luces potentes para que resalten las texturas del modelo
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
     scene.add(ambientLight);
 
-    const keyLight = new THREE.DirectionalLight(0xddeeff, 1.4);
-    keyLight.position.set(-1, 3, 4);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.5);
+    keyLight.position.set(1, 3, 4);
     scene.add(keyLight);
 
-    const redRimLight = new THREE.PointLight(0xff1500, 3.5, 8);
-    redRimLight.position.set(2, 2.5, 1.5);
+    const redRimLight = new THREE.PointLight(0xff2200, 4, 10);
+    redRimLight.position.set(2.5, 2.0, 1.5);
     scene.add(redRimLight);
 
     let mixer: THREE.AnimationMixer | null = null;
@@ -48,24 +49,39 @@ function ObserverMenu3D() {
       (gltf) => {
         const model = gltf.scene;
 
-        // Posición a la derecha de la pantalla y orientado hacia el centro
-        model.position.set(1.3, -0.9, 0.2);
-        model.rotation.y = -0.4;
-        model.scale.setScalar(1.6); // Si queda muy grande o chico, ajusta este número
+        // --- AUTO-ESCALADO INTELIGENTE ---
+        // Calcula el tamaño real de la caja 3D del modelo
+        const box = new THREE.Box3().setFromObject(model);
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
 
-        scene.add(model);
+        // Forzamos a que mida 2.5 metros de altura
+        const targetHeight = 2.5;
+        const scale = targetHeight / (size.y || 1);
+        model.scale.setScalar(scale);
 
-        // Si el archivo GLB incluye animaciones, reproduce la primera (idle/respiración/caminar)
+        // Centramos el modelo en su base (pies en Y = 0)
+        box.setFromObject(model);
+        box.getCenter(center);
+        model.position.x = -center.x;
+        model.position.y = -box.min.y;
+        model.position.z = -center.z;
+
+        // Contenedor para ubicarlo a la derecha del menú
+        const pivot = new THREE.Group();
+        pivot.add(model);
+        pivot.position.set(1.35, -0.15, 0.2); // Posición a la derecha
+        pivot.rotation.y = -0.45; // Mirando hacia el centro
+        scene.add(pivot);
+
+        // Reproducir animación si viene incluida
         if (gltf.animations.length > 0) {
           mixer = new THREE.AnimationMixer(model);
-          const action = mixer.clipAction(gltf.animations[0]);
-          action.play();
+          mixer.clipAction(gltf.animations[0]).play();
         }
       },
       undefined,
-      (err) => {
-        console.error('Error cargando /models/monster.glb:', err);
-      }
+      (err) => console.error('Error cargando /models/monster.glb:', err)
     );
 
     let animId: number;
@@ -97,54 +113,54 @@ function ObserverMenu3D() {
     };
   }, []);
 
-  return <div ref={mountRef} className="absolute inset-0 pointer-events-none z-[1]" />;
+  return <div ref={mountRef} className="absolute inset-0 pointer-events-none z-[2]" />;
 }
 
 // ============================================================================
-// FONDO DEL MENÚ (FONDO ORIGINAL HECHO POR CÓDIGO + BICHO 3D)
+// MENU BACKDROP (FONDO POR CÓDIGO + BICHO)
 // ============================================================================
 export function MenuBackdrop() {
   return (
     <div className="fixed inset-0 overflow-hidden bg-[#030507]" style={{ zIndex: 0 }}>
-      {/* Luces y degradados atmosféricos originales */}
+      {/* Luces y degradados originales */}
       <div 
         className="absolute inset-0" 
         style={{ 
-          background: 'radial-gradient(ellipse at 70% 40%, rgba(120,20,25,.25), transparent 55%), radial-gradient(ellipse at 20% 80%, rgba(30,70,90,.28), transparent 60%)' 
+          background: 'radial-gradient(ellipse at 70% 40%, rgba(120,20,25,.30), transparent 55%), radial-gradient(ellipse at 20% 80%, rgba(30,70,90,.28), transparent 60%)' 
         }} 
       />
       <div 
         className="absolute inset-0 anim-flick" 
         style={{ 
-          background: 'radial-gradient(circle at 78% 18%, rgba(255,40,30,.22), transparent 28%)' 
+          background: 'radial-gradient(circle at 78% 18%, rgba(255,40,30,.25), transparent 30%)' 
         }} 
       />
 
-      {/* Tu nuevo bicho 3D renderizado en tiempo real */}
+      {/* Tu nuevo bicho 3D auto-escalado */}
       <ObserverMenu3D />
 
-      {/* Capas de niebla flotante */}
+      {/* Niebla submarina flotante */}
       {[0, 1, 2].map((i) => (
         <div 
           key={i} 
-          className="absolute inset-x-[-20%] pointer-events-none" 
+          className="absolute inset-x-[-20%] pointer-events-none z-[1]" 
           style={{ 
             bottom: `${i * 14}%`, 
             height: '40%', 
-            background: 'radial-gradient(ellipse at center, rgba(140,160,170,.09), transparent 65%)', 
+            background: 'radial-gradient(ellipse at center, rgba(140,160,170,.08), transparent 65%)', 
             animation: `drift ${14 + i * 6}s ease-in-out ${i * -4}s infinite alternate` 
           }} 
         />
       ))}
 
-      {/* Sombra inferior para garantizar lectura de botones */}
-      <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black to-transparent pointer-events-none" />
+      {/* Sombra inferior suave */}
+      <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-black via-black/50 to-transparent pointer-events-none z-[3]" />
     </div>
   );
 }
 
 // ============================================================================
-// MAIN MENU & PANELES UI
+// MAIN MENU
 // ============================================================================
 export function MainMenu(p: {
   hasSave: boolean; saveInfo?: string; alias: string; setAlias: (s: string) => void;
