@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState, type ReactNode } from 'react';
 import { CHAPTERS, DEFAULT_SETTINGS, loadProgress, loadScores, type Settings } from '../game/data';
 import { audio } from '../game/audio';
 
@@ -30,12 +30,30 @@ export function MenuBackdrop() {
 }
 
 export function MainMenu(p: {
-  hasSave: boolean; saveInfo?: string; alias: string; setAlias: (s: string) => void;
-  onNew: () => void; onContinue: () => void; onChapters: () => void; onSettings: () => void; onCredits: () => void; onScores: () => void; onExit: () => void;
+  hasSave: boolean;
+  saveInfo?: string;
+  alias: string;
+  setAlias: (s: string) => void;
+  onNew: () => void;
+  onContinue: () => void;
+  onChapters: () => void;
+  onSettings: () => void;
+  onCredits: () => void;
+  onScores: () => void;
+  onExit: () => void;
 }) {
   const B = (label: string, fn: () => void, dis = false, sub?: string) => (
-    <button className="menu-btn" disabled={dis} onClick={() => { audio.click(); fn(); }} onMouseEnter={() => audio.uiHover()}>
-      {label}{sub && <span className="block text-[10px] tracking-widest text-cyan-300/60 normal-case mt-0.5">{sub}</span>}
+    <button
+      className="menu-btn"
+      disabled={dis}
+      onClick={() => {
+        audio.click();
+        fn();
+      }}
+      onMouseEnter={() => audio.uiHover()}
+    >
+      {label}
+      {sub && <span className="block text-[10px] tracking-widest text-cyan-300/60 normal-case mt-0.5">{sub}</span>}
     </button>
   );
 
@@ -52,11 +70,16 @@ export function MainMenu(p: {
           </p>
           <div className="mt-6 hidden sm:flex items-center gap-2 text-xs text-slate-400 font-mono2">
             <span>ALIAS:</span>
-            <input value={p.alias} maxLength={12} onChange={(e) => p.setAlias(e.target.value.toUpperCase())} className="bg-black/50 border border-white/20 px-2 py-1 text-cyan-200 w-36 tracking-widest outline-none focus:border-red-500" />
+            <input
+              value={p.alias}
+              maxLength={12}
+              onChange={(e) => p.setAlias(e.target.value.toUpperCase())}
+              className="bg-black/50 border border-white/20 px-2 py-1 text-cyan-200 w-36 tracking-widest outline-none focus:border-red-500"
+            />
           </div>
         </div>
         
-        {/* LISTA DE BOTONES DEL MENÚ */}
+        {/* BOTONES DEL MENÚ */}
         <div className="w-full max-w-sm sm:w-72 lg:w-96 shrink-0 sm:self-center space-y-1.5">
           {B('Nueva partida', p.onNew)}
           {B('Continuar', p.onContinue, !p.hasSave, p.hasSave ? p.saveInfo : 'Sin partida guardada')}
@@ -68,7 +91,8 @@ export function MainMenu(p: {
           {B('Créditos', p.onCredits)}
           {B('Salir', p.onExit)}
           <div className="pt-4 text-[10px] text-slate-500 font-mono2 tracking-wider leading-relaxed hidden sm:block">
-            WASD mover · RATÓN mirar · SHIFT correr · C agacharse · ESPACIO saltar<br />F linterna · E interactuar · TAB mochila · G distractor · Q curarse · ESC pausa
+            WASD mover · RATÓN mirar · SHIFT correr · C agacharse · ESPACIO saltar<br />
+            F linterna · E interactuar · TAB mochila · G distractor · Q curarse · ESC pausa
           </div>
         </div>
       </div>
@@ -76,7 +100,7 @@ export function MainMenu(p: {
   );
 }
 
-function Shell({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
+function Shell({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center p-3 sm:p-8 bg-black/70 backdrop-blur-sm">
       <div className={`panel w-full ${wide ? 'max-w-4xl' : 'max-w-2xl'} max-h-full flex flex-col hud-in`}>
@@ -163,7 +187,7 @@ export function Farewell({ onBack }: { onBack: () => void }) {
 }
 
 // ---------- Ajustes ----------
-function Row({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
+function Row({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
     <div className="py-2 border-b border-white/5">
       <div className="flex items-center justify-between gap-4">
