@@ -1,349 +1,382 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Game, audio } from './game/engine';
-import {
-  addScore, clearSave, loadProgress, loadSave, loadSettings, saveSettings, writeProgress, type ScoreEntry, type Settings,
-} from './game/data';
-import { ChapterSelect, Credits, Farewell, MainMenu, MenuBackdrop, Scores, SettingsPanel } from './ui/Menus';
-import { Hud, TouchControls } from './ui/Hud';
-import { Choice, Complete, DocModal, GameOver, Inventory, Keypad, PauseMenu } from './ui/Panels';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import * as EngineModule from './game/engine';
+import { MainMenu } from './ui/Menus';
 
-type Screen = 'menu' | 'chapters' | 'settings' | 'credits' | 'scores' | 'farewell' | 'intro' | 'game';
-type Modal = 'none' | 'pause' | 'inventory' | 'doc' | 'keypad' | 'choice';
+// Compatibilidad con cualquier tipo de export en engine.ts
+const GameClass = (EngineModule as any).GameEngine || (EngineModule as any).Engine || (EngineModule as any).Game || (EngineModule as any).default;
 
-// ============================================================================
-// CINEMÁTICA DEL CHOQUE
-// ============================================================================
-function IntroCutscene({ onComplete }: { onComplete: () => void }) {
-  const [time, setTime] = useState(0);
-  const [speed, setSpeed] = useState(130);
-  const [depth, setDepth] = useState(7240);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const doneRef = useRef(false);
+type GamePhase = 'menu' | 'cutscene' | 'awakening' | 'playing' | 'dead' | 'paused';
 
-  const finish = useCallback(() => {
-    if (doneRef.current) return;
-    doneRef.current = true;
-    onComplete();
-  }, [onComplete]);
+export default function App() {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const engineRef = useRef<any>(null);
 
+  const [phase, setPhase] = useState<GamePhase>('menu');
+  const [hasSave, setHasSave] = useState<boolean>(() => {
+    return !!localStorage.getItem('abismo_save_slot');
+  });
+  const [saveInfo, setSaveInfo] = useState<string>('Capítulo 1 - Inicio');
+
+  // Inicializar motor 3D
   useEffect(() => {
+    if (!canvasRef.current) return;
     try {
-      const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      const ctx = new AC();
-      audioCtxRef.current = ctx;
-
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(60, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(220, ctx.currentTime + 4.5);
-      gain.gain.setValueAtTime(0.12, ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.25, ctx.currentTime + 4.2);
-      gain.gain.setValueAtTime(0, ctx.currentTime + 4.8);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-
-      for (let i = 0; i < 4; i++) {
-        const tStart = ctx.currentTime + 2.2 + i * 0.5;
-        const aOsc = ctx.createOscillator();
-        const aGain = ctx.createGain();
-        aOsc.type = 'square';
-        aOsc.frequency.setValueAtTime(880, tStart);
-        aGain.gain.setValueAtTime(0.15, tStart);
-        aGain.gain.exponentialRampToValueAtTime(0.01, tStart + 0.3);
-        aOsc.connect(aGain);
-        aGain.connect(ctx.destination);
-        aOsc.start(tStart);
-        aOsc.stop(tStart + 0.35);
-      }
-    } catch {
-      // Ignorar fallback
+      const eng = new GameClass(canvasRef.current, {
+        onDeath: () => setPhase('dead'),
+        onSave: (info: string) => {
+          setHasSave(true);
+          setSaveInfo(info);
+        }
+      });
+      engineRef.current = eng;
+    } catch (e) {
+      console.error('Error al inicializar el motor:', e);
     }
 
     return () => {
-      try {
-        if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
-          audioCtxRef.current.close();
-        }
-      } catch {
-        // Ignorar
+      if (engineRef.current?.destroy) {
+        engineRef.current.destroy();
       }
     };
   }, []);
 
-  useEffect(() => {
-    const start = performance.now();
-    const interval = setInterval(() => {
-      const elapsed = (performance.now() - start) / 1000;
-      setTime(elapsed);
+  // Iniciar nueva partida -> Lanza la cinemática
+  const handleNewGame = () => {
+    setPhase('cutscene');
+  };
 
-      if (elapsed < 4.8) {
-        setSpeed(Math.min(285, Math.floor(130 + elapsed * 32)));
-        setDepth(Math.floor(7240 + elapsed * 160));
+  // Continuar partida guardada
+  const handleContinue = () => {
+    if (engineRef.current) {
+      engineRef.current.loadSave?.();
+      setPhase('awakening');
+    }
+  };
+
+  // Terminar cinemática -> Pasa al estado de DESPERTAR (desmontando la cinemática)
+  const finishCutscene = useCallback(() => {
+    if (engineRef.current) {
+      try {
+        engineRef.current.loadChapter?.(1);
+      } catch (e) {
+        console.warn('loadChapter warn:', e);
       }
+    }
+    setPhase('awakening');
+  }, []);
 
-      if (elapsed >= 6.8) {
-        clearInterval(interval);
-        finish();
+  // Despertar: Clic o Tecla desbloquea la pantalla e inicia el juego
+  const handleWakeUp = useCallback(() => {
+    setPhase('playing');
+    if (engineRef.current) {
+      try {
+        engineRef.current.requestLock?.();
+      } catch (err) {
+        console.warn('Pointer lock request catch:', err);
       }
-    }, 50);
+      try {
+        engineRef.current.start?.();
+      } catch (err) {
+        console.warn('Engine start catch:', err);
+      }
+    }
+  }, []);
 
-    return () => clearInterval(interval);
-  }, [finish]);
-
+  // Escuchar cualquier clic o tecla durante el estado de despertar
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      e.preventDefault();
-      finish();
-    };
+    if (phase !== 'awakening') return;
+
+    const onKey = () => handleWakeUp();
+    const onClick = () => handleWakeUp();
+
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [finish]);
+    window.addEventListener('click', onClick);
 
-  const isAlarm = time >= 2.2 && time < 4.8;
-  const isImpact = time >= 4.8 && time < 5.2;
-  const isBlackout = time >= 5.2;
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('click', onClick);
+    };
+  }, [phase, handleWakeUp]);
 
   return (
-    <div
-      onClick={finish}
-      className={`fixed inset-0 z-50 bg-black overflow-hidden select-none font-mono2 ${isAlarm ? 'animate-pulse' : ''} cursor-pointer`}
-    >
-      {!isBlackout && (
-        <div className="absolute inset-0 flex items-center justify-center opacity-70 pointer-events-none">
-          <div
-            className="w-[200vw] h-[200vh] border-[12px] border-cyan-500/20 rounded-full animate-ping"
-            style={{ animationDuration: `${Math.max(0.15, 0.45 - time * 0.06)}s` }}
-          />
-        </div>
+    <div style={{ width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden', background: '#000', userSelect: 'none' }}>
+      
+      {/* Canvas 3D de fondo siempre presente */}
+      <canvas
+        ref={canvasRef}
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'block',
+          outline: 'none'
+        }}
+      />
+
+      {/* 1. MENÚ PRINCIPAL */}
+      {phase === 'menu' && (
+        <MainMenu
+          onNew={handleNewGame}
+          onContinue={handleContinue}
+          hasSave={hasSave}
+          saveInfo={saveInfo}
+          onChapters={() => {}}
+          onSettings={() => {}}
+        />
       )}
 
-      {!isBlackout && (
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-neutral-900 to-transparent" />
-          {time >= 2.8 && (
-            <div
-              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 border-4 border-red-600/70 bg-neutral-950 flex flex-col items-center justify-center"
-              style={{
-                width: `${Math.min(90, (time - 2.8) * 45)}vw`,
-                height: `${Math.min(80, (time - 2.8) * 40)}vh`,
-              }}
-            >
-              <div className="text-red-500 text-xs sm:text-lg font-bold tracking-[.4em] anim-flick">
-                COMPUERTA BLINDADA B-01 · NEXUS
-              </div>
-            </div>
-          )}
-
-          <div className="absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-neutral-950 to-transparent p-6 flex flex-col justify-end">
-            <div className="max-w-4xl mx-auto w-full flex items-end justify-between border-t border-cyan-500/30 pt-3">
-              <div>
-                <div className="text-[11px] text-cyan-300/80 tracking-widest">TRANSPORTE NEXUS-04</div>
-                <div className="text-xs text-slate-400 mt-1">
-                  PROFUNDIDAD: <span className="text-white font-bold">−{depth.toLocaleString()} m</span>
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-xs text-slate-400">VELOCÍMETRO</div>
-                <div className={`text-2xl sm:text-3xl font-bold ${isAlarm ? 'text-red-500' : 'text-cyan-300'}`}>
-                  {speed} <span className="text-sm font-normal">KM/H</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* 2. CINEMÁTICA DE ACCIDENTE */}
+      {phase === 'cutscene' && (
+        <IntroCutscene onComplete={finishCutscene} />
       )}
 
-      {isAlarm && (
-        <div className="absolute inset-x-0 top-1/4 flex flex-col items-center justify-center p-4 pointer-events-none">
-          <div className="bg-red-950/80 border-2 border-red-600 px-6 py-4 rounded shadow-[0_0_50px_rgba(255,0,0,0.6)] text-center anim-flick">
-            <div className="text-red-400 text-sm font-bold tracking-[.3em]">⚠ ¡FALLO DE FRENOS! ⚠</div>
-            <div className="text-white text-lg sm:text-2xl font-title tracking-[.2em] mt-1">IMPACTO INMINENTE</div>
-          </div>
-        </div>
-      )}
-
-      {isImpact && <div className="absolute inset-0 bg-white z-50 pointer-events-none" />}
-
-      {isBlackout && (
-        <div className="absolute inset-0 bg-black flex flex-col items-center justify-center p-6 text-center pointer-events-none">
-          <div className="text-red-500/80 text-xs sm:text-sm tracking-[.4em] anim-flick mb-3">
+      {/* 3. PANTALLA DE DESPERTAR (Limpia y con detección de clic garantizada) */}
+      {phase === 'awakening' && (
+        <div
+          onClick={handleWakeUp}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 99999,
+            backgroundColor: '#000',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            fontFamily: 'monospace',
+            textAlign: 'center',
+            padding: '20px'
+          }}
+        >
+          <div style={{
+            color: '#e24444',
+            fontSize: '15px',
+            letterSpacing: '3px',
+            marginBottom: '20px',
+            textTransform: 'uppercase'
+          }}>
             SEÑAL BIOMÉTRICA DÉBIL · SUJETO INCONSCIENTE
           </div>
-          <p className="text-slate-400 text-sm max-w-md">
-            El impacto destrozó la compuerta. La cabina está inundada de humo frío...
-          </p>
-          <div className="text-cyan-400/80 text-xs tracking-[.3em] mt-6 animate-pulse">
-            [ HAZ CLIC PARA DESPERTAR ]
+
+          <div style={{
+            color: '#8899aa',
+            fontSize: '14px',
+            lineHeight: '1.8',
+            maxWidth: '520px',
+            marginBottom: '45px'
+          }}>
+            El impacto destrozó la compuerta NEXUS B-01.<br />
+            La cabina del transporte está inundada de humo frío y chispas...
           </div>
+
+          <div style={{
+            color: '#22d3ee',
+            fontSize: '14px',
+            letterSpacing: '2px',
+            animation: 'pulse 1.8s infinite'
+          }}>
+            [ HAZ CLIC O PRESIONA CUALQUIER TECLA PARA DESPERTAR ]
+          </div>
+
+          <style>{`
+            @keyframes pulse {
+              0%, 100% { opacity: 0.3; transform: scale(0.99); }
+              50% { opacity: 1; transform: scale(1.01); }
+            }
+          `}</style>
         </div>
       )}
 
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          finish();
-        }}
-        className="fixed bottom-6 right-6 z-50 px-4 py-2 border border-white/30 bg-black/80 hover:bg-red-950/60 hover:border-red-500 text-xs sm:text-sm tracking-widest text-slate-300 hover:text-white rounded shadow-lg flex items-center gap-2 cursor-pointer"
-      >
-        <span>SALTAR</span>
-        <span className="text-[10px] text-cyan-300/80 hidden sm:inline">[ESC]</span>
-        <span>⏭</span>
-      </button>
+      {/* 4. PANTALLA DE MUERTE */}
+      {phase === 'dead' && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 99999,
+          background: 'rgba(20,0,0,0.92)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontFamily: 'monospace',
+          color: '#fff'
+        }}>
+          <h1 style={{ color: '#ff2222', letterSpacing: '4px', fontSize: '2rem' }}>SEÑAL VITAL PERDIDA</h1>
+          <p style={{ color: '#888', marginBottom: '30px' }}>Tu cuerpo descansa en el abismo de la fosa.</p>
+          <button
+            onClick={() => {
+              if (engineRef.current?.restart) engineRef.current.restart();
+              setPhase('awakening');
+            }}
+            style={{
+              padding: '12px 24px',
+              background: '#222',
+              color: '#fff',
+              border: '1px solid #ff3333',
+              cursor: 'pointer',
+              fontFamily: 'monospace'
+            }}
+          >
+            REINTENTAR
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
-// ============================================================================
-// COMPONENTE PRINCIPAL
-// ============================================================================
-export default function App() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [game, setGame] = useState<Game | null>(null);
-  const [screen, setScreen] = useState<Screen>('menu');
-  const [settings, setSettings] = useState<Settings>(() => loadSettings());
-  const [modal, setModal] = useState<Modal>('none');
-  const [pauseSettings, setPauseSettings] = useState(false);
-  const [showScores, setShowScores] = useState(false);
-  const [docInfo, setDocInfo] = useState<{ doc: Parameters<typeof DocModal>[0]['doc']; first: boolean } | null>(null);
-  const [keypad, setKeypad] = useState<{ digits: number } | null>(null);
-  const [choice, setChoice] = useState<{ title: string; opts: string[] } | null>(null);
-  const [over, setOver] = useState<{ score: number; time: number; rank: number; best: boolean } | null>(null);
-  const [done, setDone] = useState<{ info: Record<string, unknown>; rank: number; best: boolean } | null>(null);
-  const [hasSave, setHasSave] = useState(() => !!loadSave());
-  const [promptOn, setPromptOn] = useState(false);
-  const settingsRef = useRef(settings); settingsRef.current = settings;
-  const screenRef = useRef(screen); screenRef.current = screen;
-
-  const touch = useMemo(() => {
-    if (settings.touch === 'on') return true; if (settings.touch === 'off') return false;
-    return typeof window !== 'undefined' && (window.matchMedia?.('(pointer: coarse)').matches || 'ontouchstart' in window);
-  }, [settings.touch]);
+// Subcomponente de Cinemática
+function IntroCutscene({ onComplete }: { onComplete: () => void }) {
+  const [message, setMessage] = useState('INICIANDO DESCENSO A LA FOSA DE LAS MARIANAS...');
+  const [telemetry, setTelemetry] = useState('-7,850 METROS · PRESIÓN EXTERIOR: 79.5 MPa');
 
   useEffect(() => {
-    if (!canvasRef.current) return;
-    const g = Game.get(canvasRef.current);
-    (window as unknown as { __game: Game }).__game = g;
-    g.applySettings(settingsRef.current);
-    g.start();
-    setGame(g);
-  }, []);
-
-  useEffect(() => { if (game) { game.isTouch = touch; } }, [game, touch]);
-
-  useEffect(() => {
-    if (!game) return;
-    const record = (result: 'completo' | 'caído', score: number, time: number) => {
-      const entry: ScoreEntry = { alias: settingsRef.current.alias || 'OPERARIO', score, chapter: game.chapter, time, result, date: Date.now() };
-      const { rank } = addScore(entry);
-      const prog = loadProgress(); const prev = prog.best[String(game.chapter)] || 0;
-      const best = score > prev; if (best) { prog.best[String(game.chapter)] = score; writeProgress(prog); }
-      return { rank, best };
+    // Escuchar ESC / Espacio / Enter para saltar
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' || e.key === ' ' || e.key === 'Enter') {
+        onComplete();
+      }
     };
-    const offs = [
-      game.on('modal', (m: Modal) => { setModal(m); if (m === 'none') { setPauseSettings(false); } }),
-      game.on('doc', (d) => setDocInfo(d)),
-      game.on('keypad', (d) => setKeypad(d)),
-      game.on('choice', (d) => setChoice(d)),
-      game.on('hud', (h) => setPromptOn(!!h.prompt)),
-      game.on('saved', () => setHasSave(true)),
-      game.on('gameover', (d) => {
-        if (d.restart) { if (screenRef.current === 'game') doRestart(); return; }
-        const r = record('caído', d.score, d.time); setOver({ score: d.score, time: d.time, ...r });
-      }),
-      game.on('complete', (d) => { const r = record('completo', d.score, d.time); setDone({ info: d, ...r }); setHasSave(true); }),
-    ];
-    return () => offs.forEach((f) => f());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [game]);
+    window.addEventListener('keydown', handleKey);
 
-  const ensureAudio = useCallback(() => {
-    audio.init(); audio.setVolumes({ master: settingsRef.current.master, music: settingsRef.current.music, sfx: settingsRef.current.sfx, ambience: settingsRef.current.ambience }); audio.startAmbient();
-  }, []);
-
-  useEffect(() => {
-    const first = () => { ensureAudio(); if (screenRef.current !== 'game') audio.menuMode(true); };
-    window.addEventListener('pointerdown', first, { once: true }); window.addEventListener('keydown', first, { once: true });
-    return () => { window.removeEventListener('pointerdown', first); window.removeEventListener('keydown', first); };
-  }, [ensureAudio]);
-
-  const clearOverlays = () => { setOver(null); setDone(null); setDocInfo(null); setKeypad(null); setChoice(null); setPauseSettings(false); setShowScores(false); };
-
-  const startGame = (chapter: number, save: ReturnType<typeof loadSave>) => {
-    if (!game) return;
-    ensureAudio();
-    clearOverlays();
-    game.isTouch = touch;
-    game.applySettings(settings);
-    game.loadLevel(chapter, save);
-    audio.setDanger(0, true);
-    setScreen('game');
-    game.setModal('none');
+    // Audio sintetizado
+    let ctx: AudioContext | null = null;
     try {
-      game.requestLock();
-    } catch {
-      // Ignorar
-    }
-  };
+      ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    } catch (_) {}
 
-  const newGame = () => {
-    clearSave();
-    setHasSave(false);
-    ensureAudio();
-    setScreen('intro');
-  };
+    const playBeep = (freq: number, type: OscillatorType = 'sine', duration = 0.2) => {
+      if (!ctx || ctx.state === 'suspended') return;
+      try {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        gain.gain.setValueAtTime(0.12, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + duration);
+      } catch (_) {}
+    };
 
-  const doContinue = () => { const s = loadSave(); if (s) startGame(s.chapter, s); };
-  const doRestart = () => {
-    if (!game) return; clearOverlays(); audio.alarm(false);
-    game.restartFromCheckpoint(); audio.setDanger(0, true); game.setModal('none'); game.requestLock();
-  };
-  const toMenu = () => { if (!game) return; clearOverlays(); game.quitToMenu(); setScreen('menu'); setHasSave(!!loadSave()); };
-  const updateSettings = (s: Settings) => { setSettings(s); saveSettings(s); game?.applySettings(s); };
+    const timers = [
+      setTimeout(() => {
+        setMessage('ALERTA: FALLO EN VÁLVULA DE RETROPROPULSIÓN HIDRÁULICA');
+        setTelemetry('-8,020 METROS · VELOCIDAD DE DESCENSO CRÍTICA');
+        playBeep(350, 'sawtooth', 0.4);
+      }, 2200),
 
-  const sv = loadSave();
-  const saveInfo = sv ? `Cap. ${sv.chapter} · ${sv.point} · ${new Date(sv.when).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}` : undefined;
-  const playing = screen === 'game';
-  const noModal = modal === 'none' && !over && !done;
+      setTimeout(() => {
+        setMessage('PROXIMIDAD: ESTRUCTURA ARTIFICIAL NO IDENTIFICADA');
+        setTelemetry('COMPUERTA EXTERIOR NEXUS B-01 DETECTADA');
+        playBeep(450, 'square', 0.3);
+      }, 4400),
+
+      setTimeout(() => {
+        setMessage('¡¡¡ IMPACTO INMINENTE - SISTEMAS DE FRENO FUERA DE LÍNEA !!!');
+        setTelemetry('IMPACTO EN 3... 2... 1...');
+        playBeep(700, 'sawtooth', 0.5);
+      }, 6200),
+
+      setTimeout(() => {
+        playBeep(80, 'square', 1.2); // Ruido de colisión
+        onComplete();
+      }, 8200)
+    ];
+
+    return () => {
+      window.removeEventListener('keydown', handleKey);
+      timers.forEach(clearTimeout);
+      if (ctx && ctx.state !== 'closed') {
+        ctx.close().catch(() => {});
+      }
+    };
+  }, [onComplete]);
 
   return (
-    <div className="fixed inset-0 bg-black overflow-hidden">
-      <canvas id="game" ref={canvasRef} tabIndex={-1} onClick={() => { if (playing && game && game.modal === 'none' && !touch && game.state === 'playing') game.requestLock(); }} />
-      {playing && <><div className="vignette" /><div className="grain" /><div className="scan" /></>}
-      {playing && game && <Hud game={game} settings={settings} touch={touch} />}
-      {playing && game && touch && noModal && <TouchControls game={game} prompt={promptOn} />}
-      {playing && game && modal === 'pause' && !over && !done && !pauseSettings && (
-        <PauseMenu onResume={() => game.resumeGame()} onInv={() => game.setModal('inventory')} onSettings={() => setPauseSettings(true)} onRestart={doRestart} onMenu={toMenu} />
-      )}
-      {playing && game && modal === 'pause' && pauseSettings && <div className="fixed inset-0 z-50"><SettingsPanel s={settings} onChange={updateSettings} onClose={() => setPauseSettings(false)} /></div>}
-      {playing && game && modal === 'inventory' && !over && <Inventory game={game} onClose={() => game.setModal('none')} />}
-      {playing && game && modal === 'doc' && docInfo && <DocModal doc={docInfo.doc} first={docInfo.first} onClose={() => game.setModal('none')} />}
-      {playing && game && modal === 'keypad' && keypad && <Keypad game={game} digits={keypad.digits} onClose={() => game.setModal('none')} />}
-      {playing && game && modal === 'choice' && choice && <Choice title={choice.title} opts={choice.opts} onPick={(i) => game.resolveChoice(i)} />}
-      {playing && over && <GameOver {...over} onRetry={doRestart} onMenu={toMenu} />}
-      {playing && done && !showScores && <Complete info={done.info} rank={done.rank} best={done.best} onReplay={() => startGame(1, null)} onMenu={toMenu} onScores={() => setShowScores(true)} />}
-      {playing && showScores && <div className="fixed inset-0 z-50"><Scores onClose={() => setShowScores(false)} /></div>}
+    <div style={{
+      position: 'fixed',
+      inset: 0,
+      zIndex: 99990,
+      background: '#04070a',
+      color: '#fff',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+      alignItems: 'center',
+      fontFamily: 'monospace',
+      padding: '24px'
+    }}>
+      {/* Indicador superior */}
+      <div style={{ color: '#00ffcc', fontSize: '12px', letterSpacing: '3px', marginBottom: '16px' }}>
+        REGISTRO DE VUELO // TRANSPORTE SUBMARINO NEXUS-IV
+      </div>
 
-      {/* PANTALLA INTRO */}
-      {screen === 'intro' && <IntroCutscene onComplete={() => startGame(1, null)} />}
+      {/* Mensaje principal */}
+      <div style={{
+        fontSize: '18px',
+        maxWidth: '700px',
+        textAlign: 'center',
+        color: '#ff4444',
+        minHeight: '50px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontWeight: 'bold',
+        letterSpacing: '1px'
+      }}>
+        {message}
+      </div>
 
-      {!playing && screen !== 'intro' && (
-        <>
-          <MenuBackdrop />
-          <div className="grain" /><div className="scan" />
-          {screen === 'menu' && (
-            <MainMenu hasSave={hasSave} saveInfo={saveInfo} alias={settings.alias} setAlias={(a) => updateSettings({ ...settings, alias: a })}
-              onNew={newGame} onContinue={doContinue} onChapters={() => setScreen('chapters')} onSettings={() => setScreen('settings')}
-              onCredits={() => setScreen('credits')} onScores={() => setScreen('scores')} onExit={() => { setScreen('farewell'); try { window.close(); } catch { /* */ } }} />
-          )}
-          {screen === 'chapters' && <ChapterSelect onClose={() => setScreen('menu')} onPlay={(n) => startGame(n, null)} />}
-          {screen === 'settings' && <SettingsPanel s={settings} onChange={updateSettings} onClose={() => setScreen('menu')} />}
-          {screen === 'credits' && <Credits onClose={() => setScreen('menu')} />}
-          {screen === 'scores' && <Scores onClose={() => setScreen('menu')} />}
-          {screen === 'farewell' && <Farewell onBack={() => setScreen('menu')} />}
-        </>
-      )}
+      {/* Telemetría */}
+      <div style={{ color: '#667788', fontSize: '13px', marginTop: '14px', letterSpacing: '1px' }}>
+        {telemetry}
+      </div>
+
+      {/* Barra de progreso */}
+      <div style={{ width: '280px', height: '2px', background: '#1a2230', marginTop: '30px', overflow: 'hidden' }}>
+        <div style={{
+          width: '100%',
+          height: '100%',
+          background: '#00ffcc',
+          animation: 'loadProgress 8.2s linear forwards'
+        }} />
+      </div>
+
+      {/* Botón SALTAR exclusivo de la cinemática */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onComplete();
+        }}
+        style={{
+          position: 'absolute',
+          bottom: '24px',
+          right: '24px',
+          background: 'rgba(0, 0, 0, 0.7)',
+          border: '1px solid #334455',
+          color: '#8899aa',
+          padding: '8px 16px',
+          fontSize: '12px',
+          fontFamily: 'monospace',
+          cursor: 'pointer',
+          borderRadius: '4px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px'
+        }}
+      >
+        SALTAR [ESC] ⏭
+      </button>
+
+      <style>{`
+        @keyframes loadProgress {
+          from { transform: translateX(-100%); }
+          to { transform: translateX(0%); }
+        }
+      `}</style>
     </div>
   );
 }
