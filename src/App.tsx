@@ -18,6 +18,13 @@ function IntroCutscene({ onComplete }: { onComplete: () => void }) {
   const [speed, setSpeed] = useState(130);
   const [depth, setDepth] = useState(7240);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const finishedRef = useRef(false);
+
+  const handleFinish = useCallback(() => {
+    if (finishedRef.current) return;
+    finishedRef.current = true;
+    onComplete();
+  }, [onComplete]);
 
   // Sintetizador de audio para la cinemática
   useEffect(() => {
@@ -31,17 +38,17 @@ function IntroCutscene({ onComplete }: { onComplete: () => void }) {
       const gain = ctx.createGain();
       osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(60, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(220, ctx.currentTime + 7.5);
+      osc.frequency.exponentialRampToValueAtTime(220, ctx.currentTime + 5.2);
       gain.gain.setValueAtTime(0.12, ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.25, ctx.currentTime + 7.2);
-      gain.gain.setValueAtTime(0, ctx.currentTime + 7.8);
+      gain.gain.linearRampToValueAtTime(0.25, ctx.currentTime + 5.0);
+      gain.gain.setValueAtTime(0, ctx.currentTime + 5.5);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start();
 
-      // 2. Alarma de colisión (empieza a los 3.5 segundos)
-      for (let i = 0; i < 7; i++) {
-        const tStart = ctx.currentTime + 3.8 + i * 0.55;
+      // 2. Alarma de colisión (empieza a los 2.8 segundos)
+      for (let i = 0; i < 5; i++) {
+        const tStart = ctx.currentTime + 2.8 + i * 0.5;
         const alarmOsc = ctx.createOscillator();
         const alarmGain = ctx.createGain();
         alarmOsc.type = 'square';
@@ -55,13 +62,13 @@ function IntroCutscene({ onComplete }: { onComplete: () => void }) {
         alarmOsc.stop(tStart + 0.4);
       }
 
-      // 3. Choque explosivo e impacto (a los 7.8 segundos)
-      const crashTime = ctx.currentTime + 7.8;
-      const bufferSize = ctx.sampleRate * 2.5;
+      // 3. Choque explosivo e impacto (a los 5.5 segundos)
+      const crashTime = ctx.currentTime + 5.5;
+      const bufferSize = ctx.sampleRate * 2.0;
       const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
       const data = buffer.getChannelData(0);
       for (let i = 0; i < bufferSize; i++) {
-        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * 0.4));
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * 0.35));
       }
       const noise = ctx.createBufferSource();
       noise.buffer = buffer;
@@ -70,30 +77,34 @@ function IntroCutscene({ onComplete }: { onComplete: () => void }) {
       crashFilter.frequency.setValueAtTime(800, crashTime);
       const crashGain = ctx.createGain();
       crashGain.gain.setValueAtTime(0.8, crashTime);
-      crashGain.gain.exponentialRampToValueAtTime(0.01, crashTime + 2.0);
+      crashGain.gain.exponentialRampToValueAtTime(0.01, crashTime + 1.8);
       noise.connect(crashFilter);
       crashFilter.connect(crashGain);
       crashGain.connect(ctx.destination);
       noise.start(crashTime);
 
-      // 4. Pitido sordo (Tinnitus post-impacto a los 8.2 segundos)
+      // 4. Pitido sordo (Tinnitus post-impacto a los 5.8 segundos)
       const tinOsc = ctx.createOscillator();
       const tinGain = ctx.createGain();
       tinOsc.type = 'sine';
-      tinOsc.frequency.setValueAtTime(3200, crashTime + 0.4);
-      tinGain.gain.setValueAtTime(0.15, crashTime + 0.4);
-      tinGain.gain.exponentialRampToValueAtTime(0.001, crashTime + 4.5);
+      tinOsc.frequency.setValueAtTime(3200, crashTime + 0.3);
+      tinGain.gain.setValueAtTime(0.14, crashTime + 0.3);
+      tinGain.gain.exponentialRampToValueAtTime(0.001, crashTime + 3.0);
       tinOsc.connect(tinGain);
       tinGain.connect(ctx.destination);
-      tinOsc.start(crashTime + 0.4);
-      tinOsc.stop(crashTime + 4.8);
+      tinOsc.start(crashTime + 0.3);
+      tinOsc.stop(crashTime + 3.2);
     } catch {
-      // Audio fallback si el navegador bloquea autoplay
+      // Audio fallback
     }
 
     return () => {
-      if (audioCtxRef.current) {
-        audioCtxRef.current.close().catch(() => {});
+      try {
+        if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
+          audioCtxRef.current.close();
+        }
+      } catch {
+        // Ignorar
       }
     };
   }, []);
@@ -105,49 +116,50 @@ function IntroCutscene({ onComplete }: { onComplete: () => void }) {
       const elapsed = (performance.now() - start) / 1000;
       setTime(elapsed);
 
-      // Simulación física de aceleración y profundidad
-      if (elapsed < 7.8) {
-        setSpeed(Math.min(285, Math.floor(130 + elapsed * 20)));
-        setDepth(Math.floor(7240 + elapsed * 100));
+      if (elapsed < 5.5) {
+        setSpeed(Math.min(285, Math.floor(130 + elapsed * 28)));
+        setDepth(Math.floor(7240 + elapsed * 140));
       }
 
-      if (elapsed >= 12.5) {
+      // Transición automática al juego a los 8.2 segundos
+      if (elapsed >= 8.2) {
         clearInterval(interval);
-        onComplete();
+        handleFinish();
       }
     }, 50);
 
     return () => clearInterval(interval);
-  }, [onComplete]);
+  }, [handleFinish]);
 
-  // Tecla de salto (ESC / Espacio)
+  // Tecla de salto (Cualquier tecla salta la cinemática)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' || e.key === ' ' || e.key === 'Enter') {
-        e.preventDefault();
-        onComplete();
-      }
+      e.preventDefault();
+      handleFinish();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onComplete]);
+  }, [handleFinish]);
 
-  const isAlarm = time >= 3.5 && time < 7.8;
-  const isImpact = time >= 7.8 && time < 8.2;
-  const isBlackout = time >= 8.2;
+  const isAlarm = time >= 2.8 && time < 5.5;
+  const isImpact = time >= 5.5 && time < 5.9;
+  const isBlackout = time >= 5.9;
 
   return (
-    <div className={`fixed inset-0 z-50 bg-black overflow-hidden select-none font-mono2 ${isAlarm ? 'animate-pulse' : ''}`}>
+    <div
+      onClick={isBlackout ? handleFinish : undefined}
+      className={`fixed inset-0 z-50 bg-black overflow-hidden select-none font-mono2 ${isAlarm ? 'animate-pulse' : ''} ${isBlackout ? 'cursor-pointer' : ''}`}
+    >
       {/* 1. Luces del túnel a gran velocidad */}
       {!isBlackout && (
-        <div className="absolute inset-0 flex items-center justify-center opacity-70">
+        <div className="absolute inset-0 flex items-center justify-center opacity-70 pointer-events-none">
           <div
             className="w-[200vw] h-[200vh] border-[12px] border-cyan-500/20 rounded-full animate-ping"
-            style={{ animationDuration: `${Math.max(0.15, 0.6 - time * 0.05)}s` }}
+            style={{ animationDuration: `${Math.max(0.15, 0.5 - time * 0.06)}s` }}
           />
           <div
             className="absolute w-[120vw] h-[120vh] border-[16px] border-cyan-400/30 rounded-full animate-ping"
-            style={{ animationDuration: `${Math.max(0.12, 0.45 - time * 0.04)}s` }}
+            style={{ animationDuration: `${Math.max(0.12, 0.38 - time * 0.05)}s` }}
           />
         </div>
       )}
@@ -155,19 +167,18 @@ function IntroCutscene({ onComplete }: { onComplete: () => void }) {
       {/* 2. Parabrisas y Cabina del Vehículo */}
       {!isBlackout && (
         <div className="absolute inset-0 pointer-events-none">
-          {/* Estructura del marco del parabrisas */}
           <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-neutral-900 via-neutral-900/80 to-transparent border-b border-white/10" />
           <div className="absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-neutral-900 to-transparent" />
           <div className="absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-neutral-900 to-transparent" />
 
-          {/* Compuerta blindada de NEXUS acercándose en la oscuridad */}
-          {time >= 5.0 && (
+          {/* Compuerta blindada de NEXUS acercándose */}
+          {time >= 3.6 && (
             <div
               className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 border-4 border-red-600/70 bg-neutral-950 flex flex-col items-center justify-center transition-all"
               style={{
-                width: `${Math.min(90, (time - 5.0) * 35)}vw`,
-                height: `${Math.min(80, (time - 5.0) * 30)}vh`,
-                opacity: Math.min(1, (time - 5.0) * 0.8),
+                width: `${Math.min(92, (time - 3.6) * 48)}vw`,
+                height: `${Math.min(82, (time - 3.6) * 42)}vh`,
+                opacity: Math.min(1, (time - 3.6) * 0.9),
               }}
             >
               <div className="text-red-500 text-xs sm:text-lg font-bold tracking-[.4em] anim-flick">
@@ -177,7 +188,7 @@ function IntroCutscene({ onComplete }: { onComplete: () => void }) {
             </div>
           )}
 
-          {/* Tablero digital inferior del vehículo */}
+          {/* Tablero digital inferior */}
           <div className="absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-neutral-950 via-neutral-900 to-transparent p-6 flex flex-col justify-end">
             <div className="max-w-4xl mx-auto w-full flex items-end justify-between border-t border-cyan-500/30 pt-3">
               <div>
@@ -198,9 +209,9 @@ function IntroCutscene({ onComplete }: { onComplete: () => void }) {
         </div>
       )}
 
-      {/* 3. Cartel de Alarma de Colisión en Rojo */}
+      {/* 3. Alarma en Rojo */}
       {isAlarm && (
-        <div className="absolute inset-x-0 top-1/4 flex flex-col items-center justify-center p-4">
+        <div className="absolute inset-x-0 top-1/4 flex flex-col items-center justify-center p-4 pointer-events-none">
           <div className="bg-red-950/80 border-2 border-red-600 px-6 py-4 rounded shadow-[0_0_50px_rgba(255,0,0,0.6)] text-center anim-flick">
             <div className="text-red-400 text-sm sm:text-base font-bold tracking-[.3em]">
               ⚠ ¡FALLO CRÍTICO DE FRENOS HIDRÁULICOS! ⚠
@@ -212,9 +223,9 @@ function IntroCutscene({ onComplete }: { onComplete: () => void }) {
         </div>
       )}
 
-      {/* 4. Destello de Impacto Blanco y Cristal Roto */}
+      {/* 4. Destello de Impacto */}
       {isImpact && (
-        <div className="absolute inset-0 bg-white z-50 flex items-center justify-center">
+        <div className="absolute inset-0 bg-white z-50 flex items-center justify-center pointer-events-none">
           <svg className="w-full h-full stroke-black stroke-[3] opacity-80" viewBox="0 0 100 100">
             <line x1="50" y1="50" x2="10" y2="10" />
             <line x1="50" y1="50" x2="90" y2="15" />
@@ -225,7 +236,7 @@ function IntroCutscene({ onComplete }: { onComplete: () => void }) {
         </div>
       )}
 
-      {/* 5. Desmayo y transición a Capítulo 1 */}
+      {/* 5. Desmayo y despertar */}
       {isBlackout && (
         <div className="absolute inset-0 bg-black flex flex-col items-center justify-center p-6 text-center">
           <div className="text-red-500/80 text-xs sm:text-sm tracking-[.4em] anim-flick mb-3">
@@ -237,13 +248,23 @@ function IntroCutscene({ onComplete }: { onComplete: () => void }) {
           <div className="text-cyan-400/80 text-xs tracking-[.3em] mt-6 animate-pulse">
             DESPERTANDO EN LA INSTALACIÓN...
           </div>
+          <div className="text-slate-600 text-[10px] tracking-widest mt-3">
+            [ Haz clic o pulsa cualquier tecla para despertar ]
+          </div>
         </div>
       )}
 
-      {/* BOTÓN SALTAR (SKIP) EN LA ESQUINA INFERIOR DERECHA */}
+      {/* BOTÓN SALTAR (SKIP) */}
       <button
-        onClick={onComplete}
-        className="fixed bottom-6 right-6 z-50 px-4 py-2 border border-white/30 bg-black/80 hover:bg-red-950/60 hover:border-red-500 text-xs sm:text-sm tracking-widest text-slate-300 hover:text-white transition-all backdrop-blur-md rounded shadow-lg flex items-center gap-2"
+        onClick={(e) => {
+          e.stopPropagation();
+          handleFinish();
+        }}
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          handleFinish();
+        }}
+        className="fixed bottom-6 right-6 z-50 px-4 py-2 border border-white/30 bg-black/80 hover:bg-red-950/60 hover:border-red-500 text-xs sm:text-sm tracking-widest text-slate-300 hover:text-white transition-all backdrop-blur-md rounded shadow-lg flex items-center gap-2 cursor-pointer"
         title="Saltar cinemática [ESC o Espacio]"
       >
         <span>SALTAR</span>
@@ -333,14 +354,25 @@ export default function App() {
 
   const startGame = (chapter: number, save: ReturnType<typeof loadSave>) => {
     if (!game) return;
-    ensureAudio(); clearOverlays();
-    game.isTouch = touch; game.applySettings(settings);
-    game.loadLevel(chapter, save);
-    audio.setDanger(0, true);
-    setScreen('game'); game.setModal('none'); game.requestLock();
+    try { ensureAudio(); } catch { /* */ }
+    clearOverlays();
+    try {
+      game.isTouch = touch;
+      game.applySettings(settings);
+      game.loadLevel(chapter, save);
+      audio.setDanger(0, true);
+    } catch (err) {
+      console.error('Error starting level:', err);
+    }
+    setScreen('game');
+    try {
+      game.setModal('none');
+      game.requestLock();
+    } catch {
+      // Si el navegador bloquea el puntero automático, se activará con el primer clic del jugador
+    }
   };
 
-  // Al presionar Nueva Partida -> Se ejecuta la cinemática
   const newGame = () => {
     clearSave();
     setHasSave(false);
@@ -379,7 +411,7 @@ export default function App() {
       {playing && done && !showScores && <Complete info={done.info} rank={done.rank} best={done.best} onReplay={() => startGame(1, null)} onMenu={toMenu} onScores={() => setShowScores(true)} />}
       {playing && showScores && <div className="fixed inset-0 z-50"><Scores onClose={() => setShowScores(false)} /></div>}
 
-      {/* PANTALLA DE CINEMÁTICA */}
+      {/* CINEMÁTICA INTRO */}
       {screen === 'intro' && <IntroCutscene onComplete={() => startGame(1, null)} />}
 
       {!playing && screen !== 'intro' && (
