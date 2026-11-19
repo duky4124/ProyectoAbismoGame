@@ -1,12 +1,15 @@
-import React, { useState } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
 
-// --- FONDO ANIMADO / AMBIENTAL DEL MENÚ ---
+// --- FONDO AMBIENTAL DEL MENÚ (Sin clases raras de Tailwind para no romper Vite) ---
 export function MenuBackdrop() {
   return (
-    <div className="absolute inset-0 pointer-events-none overflow-hidden bg-gradient-to-b from-[#020813] via-[#04101d] to-[#010408]">
-      <div className="absolute inset-0 opacity-20 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-cyan-500/20 via-transparent to-transparent" />
-      <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-black to-transparent" />
-    </div>
+    <div
+      className="fixed inset-0 pointer-events-none overflow-hidden"
+      style={{
+        background: 'radial-gradient(circle at 25% 45%, #071526 0%, #020710 65%, #000205 100%)',
+        zIndex: 0
+      }}
+    />
   );
 }
 
@@ -18,11 +21,11 @@ export interface MainMenuProps {
   setAlias?: (a: string) => void;
   onNew: () => void;
   onContinue: () => void;
-  onChapters: () => void;
-  onSettings: () => void;
-  onCredits: () => void;
-  onScores: () => void;
-  onExit: () => void;
+  onChapters?: () => void;
+  onSettings?: () => void;
+  onCredits?: () => void;
+  onScores?: () => void;
+  onExit?: () => void;
 }
 
 export function MainMenu({
@@ -40,9 +43,10 @@ export function MainMenu({
 }: MainMenuProps) {
   const [editingAlias, setEditingAlias] = useState(false);
 
-  const B = (label: string, onClick: () => void, disabled = false, sub?: string) => (
+  const B = (label: string, onClick?: () => void, disabled = false, sub?: string) => (
     <button
       key={label}
+      type="button"
       disabled={disabled}
       onClick={disabled ? undefined : onClick}
       style={{
@@ -138,7 +142,7 @@ export function MainMenu({
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
-                    setAlias((e.target as any).value.trim() || 'OPERARIO');
+                    setAlias((e.target as HTMLInputElement).value.trim() || 'OPERARIO');
                     setEditingAlias(false);
                   }
                 }}
@@ -170,11 +174,11 @@ export function MainMenu({
         {B('Nueva partida', onNew)}
         {B('Continuar', onContinue, !hasSave, hasSave ? saveInfo : 'Sin partida guardada')}
         {B('Multijugador', () => {}, true, '🔒 Bloqueado · Servidores NEXUS fuera de línea')}
-        {B('Seleccionar capítulo', onChapters)}
-        {B('Ajustes', onSettings)}
-        {B('Puntuaciones', onScores)}
-        {B('Créditos', onCredits)}
-        {B('Salir', onExit)}
+        {onChapters && B('Seleccionar capítulo', onChapters)}
+        {onSettings && B('Ajustes', onSettings)}
+        {onScores && B('Puntuaciones', onScores)}
+        {onCredits && B('Créditos', onCredits)}
+        {onExit && B('Salir', onExit)}
       </div>
     </div>
   );
@@ -186,6 +190,7 @@ export function ChapterSelect({ onClose, onPlay }: { onClose: () => void; onPlay
     <ModalPanel title="SELECCIONAR CAPÍTULO" onClose={onClose}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '15px' }}>
         <button
+          type="button"
           onClick={() => onPlay(1)}
           style={panelBtnStyle}
         >
@@ -196,6 +201,7 @@ export function ChapterSelect({ onClose, onPlay }: { onClose: () => void; onPlay
         </button>
 
         <button
+          type="button"
           disabled
           style={{ ...panelBtnStyle, opacity: 0.5, cursor: 'not-allowed' }}
         >
@@ -216,22 +222,22 @@ export function SettingsPanel({ s, onChange, onClose }: { s: any; onChange: (s: 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '15px', fontSize: '13px' }}>
         <SettingSlider
           label="Volumen General"
-          value={s.master ?? 0.8}
+          value={s?.master ?? 0.8}
           onChange={(v) => onChange({ ...s, master: v })}
         />
         <SettingSlider
           label="Música"
-          value={s.music ?? 0.7}
+          value={s?.music ?? 0.7}
           onChange={(v) => onChange({ ...s, music: v })}
         />
         <SettingSlider
           label="Efectos de Sonido"
-          value={s.sfx ?? 0.8}
+          value={s?.sfx ?? 0.8}
           onChange={(v) => onChange({ ...s, sfx: v })}
         />
         <SettingSlider
           label="Ambiente"
-          value={s.ambience ?? 0.75}
+          value={s?.ambience ?? 0.75}
           onChange={(v) => onChange({ ...s, ambience: v })}
         />
       </div>
@@ -277,17 +283,17 @@ export function Farewell({ onBack }: { onBack: () => void }) {
       <p style={{ color: '#667788', margin: '15px 0 25px 0', fontSize: '13px' }}>
         Puedes cerrar esta pestaña del navegador de forma segura.
       </p>
-      <button onClick={onBack} style={panelBtnStyle}>VOLVER AL MENÚ</button>
+      <button type="button" onClick={onBack} style={panelBtnStyle}>VOLVER AL MENÚ</button>
     </div>
   );
 }
 
 // Auxiliares de UI
-function ModalPanel({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
+function ModalPanel({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 60,
-      background: 'rgba(2, 6, 12, 0.85)', backdropFilter: 'blur(4px)',
+      background: 'rgba(2, 6, 12, 0.85)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       fontFamily: 'monospace', padding: '20px'
     }}>
@@ -297,11 +303,11 @@ function ModalPanel({ title, children, onClose }: { title: string; children: Rea
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #142436', paddingBottom: '10px' }}>
           <h3 style={{ margin: 0, color: '#e0f0ff', fontSize: '15px', letterSpacing: '2px' }}>{title}</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#8899aa', fontSize: '18px', cursor: 'pointer' }}>✕</button>
+          <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', color: '#8899aa', fontSize: '18px', cursor: 'pointer' }}>✕</button>
         </div>
         {children}
         <div style={{ marginTop: '24px', textAlign: 'right' }}>
-          <button onClick={onClose} style={{ ...panelBtnStyle, width: 'auto', padding: '6px 16px', fontSize: '12px' }}>
+          <button type="button" onClick={onClose} style={{ ...panelBtnStyle, width: 'auto', padding: '6px 16px', fontSize: '12px' }}>
             VOLVER
           </button>
         </div>
@@ -330,7 +336,7 @@ function SettingSlider({ label, value, onChange }: { label: string; value: numbe
   );
 }
 
-const panelBtnStyle: React.CSSProperties = {
+const panelBtnStyle: CSSProperties = {
   background: 'rgba(12, 22, 34, 0.8)',
   border: '1px solid #1c3048',
   color: '#e0f0ff',
