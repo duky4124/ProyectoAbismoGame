@@ -71,9 +71,9 @@ export class Observer {
     let left: THREE.Object3D | null = null;
     let right: THREE.Object3D | null = null;
 
-    // Listar TODOS los nodos con nombre (luego puedes borrar esto)
+    // Diagnóstico: lista todos los nodos con nombre (borrable después)
     model.traverse((o) => {
-      if (o.name) console.log('[Observer v3] nodo:', o.name);
+      if (o.name) console.log('[Observer v4] nodo:', o.name);
     });
 
     model.traverse((o) => {
@@ -89,7 +89,7 @@ export class Observer {
       .filter((n): n is THREE.Object3D => !!n)
       .map((node) => ({ node, baseX: node.rotation.x, baseZ: node.rotation.z }));
 
-    console.log('%c[Observer v3] patas detectadas:',
+    console.log('%c[Observer v4] patas detectadas:',
       'color:lime',
       this.frontLimbs.map((l) => l.node.name));
   }
@@ -155,7 +155,7 @@ export class Observer {
 
   /**
    * Gira hacia la dirección por el camino más corto.
-   * SI CAMINA DE ESPALDAS: cambia la línea targetYaw a:
+   * SI CAMINARA DE ESPALDAS, cambiar esta línea a:
    *   const targetYaw = Math.atan2(dirX, dirZ) + Math.PI;
    */
   private faceTowards(dirX: number, dirZ: number, delta: number) {
@@ -170,7 +170,7 @@ export class Observer {
 
   /**
    * Marcha: pierna izquierda pisa, luego la derecha (180° después).
-   * SOLO rotación en X — nunca en Z (eso abría las piernas).
+   * SOLO rotación en X — nunca en Z (eso abría/separaba las piernas).
    */
   private animateGait(delta: number, moving: boolean) {
     if (moving) {
@@ -189,7 +189,7 @@ export class Observer {
       limb.node.rotation.z = limb.baseZ;
     });
 
-    // Todo el cuerpo sube/baja JUNTO (nada se separa)
+    // Todo el cuerpo sube/baja JUNTO (nada se separa del torso)
     this.wrapper.position.y =
       this.wrapperBaseY + Math.abs(Math.sin(p)) * 0.05 * a;
 
