@@ -15,6 +15,7 @@ export class Observer {
   harmless = false;
 
   private model: THREE.Group | null = null;
+  private wrapper = new THREE.Group(); // Contenedor para giro y animación de caminata
   private mixer: THREE.AnimationMixer | null = null;
   private actions: { [key: string]: THREE.AnimationAction } = {};
   private currentAction: THREE.AnimationAction | null = null;
@@ -43,22 +44,25 @@ export class Observer {
   constructor(private g: Game) {
     const loader = new GLTFLoader();
 
+    // El wrapper gira 180° para que el bicho quede mirando de frente hacia el jugador
+    this.wrapper.rotation.y = Math.PI;
+    this.group.add(this.wrapper);
+
     loader.load(
       '/models/monster.glb',
       (gltf) => {
         this.model = gltf.scene;
 
-        // --- AUTO-ESCALADO INTELIGENTE EN PARTIDA ---
+        // Auto-escalado a 2.7m de altura (tamaño imponente)
         const box = new THREE.Box3().setFromObject(this.model);
         const size = box.getSize(new THREE.Vector3());
         const center = box.getCenter(new THREE.Vector3());
 
-        // Forzamos a que mida 2.8 metros de alto (monstruo aterrador)
-        const targetHeight = 2.8;
+        const targetHeight = 2.7;
         const scale = targetHeight / (size.y || 1);
         this.model.scale.setScalar(scale);
 
-        // Alineamos pies exactamente a la base (Y = 0)
+        // Apoyar pies exactamente en el suelo
         box.setFromObject(this.model);
         box.getCenter(center);
         this.model.position.x = -center.x;
@@ -71,22 +75,22 @@ export class Observer {
           }
         });
 
-        const wrapper = new THREE.Group();
-        wrapper.add(this.model);
-        this.group.add(wrapper);
+        this.wrapper.add(this.model);
 
-        // Cargar animaciones si existen
+        // Si el archivo GLB incluye animaciones integradas
         if (gltf.animations.length > 0) {
           this.mixer = new THREE.AnimationMixer(this.model);
           gltf.animations.forEach((clip) => {
             const name = clip.name.toLowerCase();
             this.actions[name] = this.mixer!.clipAction(clip);
           });
-          this.playAnim('idle');
+          // Reproduce la primera animación por defecto
+          const firstAction = Object.values(this.actions)[0];
+          if (firstAction) firstAction.play();
         }
       },
       undefined,
-      (err) => console.error('Error cargando monstruo en partida:', err)
+      (err) => console.error('Error cargando monstruo:', err)
     );
 
     this.group.visible = false;
@@ -99,9 +103,9 @@ export class Observer {
     if (!target || target === this.currentAction) return;
 
     if (this.currentAction) {
-      this.currentAction.fadeOut(0.25);
+      this.currentAction.fadeOut(0.3);
     }
-    target.reset().fadeIn(0.25).play();
+    target.reset().fadeIn(0.3).play();
     this.currentAction = target;
   }
 
@@ -144,7 +148,7 @@ export class Observer {
     this.state = 'chase'; this.chaseT = 0; this.lostT = 0; this.detect = 1;
     this.lastSeen = { x: this.g.P.x, z: this.g.P.z };
     this.g.audio.screech({ x: this.x, y: 2, z: this.z });
-    this.g.shake(0.5, 0.6);
+    this.g.shake(0.4, 0.5);
     this.g.onEnemyAlert();
   }
 
@@ -214,7 +218,7 @@ export class Observer {
       this.g.audio.doorSlide({ x: door.x, y: 1.5, z: door.z }, door.heavy);
     }
     const wantYaw = Math.atan2(-dx0, -dz0);
-    this.yaw = turn(this.yaw, wantYaw, (this.state === 'chase' ? 9 : 4) * dt);
+    this.yaw = turn(this.yaw, wantYaw, (this.state === 'chase' ? 7 : 3.5) * dt);
     this.speedNow = speed;
     const step = Math.min(speed * dt, dl);
     const p = { x: this.x + (dx0 / dl) * step, z: this.z + (dz0 / dl) * step };
@@ -252,12 +256,15 @@ export class Observer {
     this.threat = this.chasing ? 2 : (this.state !== 'patrol' || this.hasLOS) && (this.detect > 0.25 || (this.hasLOS && dist < 24)) ? 1 : (this.state === 'investigate' ? 1 : 0);
     if (this.detect >= 1 && !this.chasing && !(this.state === 'watch' && this.harmless)) this.startChase();
 
+    // ========================================================================
+    // VELOCIDADES CALIBRADAS (Más lento y terrorífico)
+    // ========================================================================
     switch (this.state) {
       case 'watch': {
         this.yaw = turn(this.yaw, Math.atan2(-dx, -dz), 2.5 * dt);
         this.watchT -= dt;
         const looking = g.lookDot(this.x, this.z) > 0.6 && this.hasLOS;
-        if (!looking && dist > 13 && !this.harmless) this.goto(P.x, P.z, 1.1, dt);
+        if (!looking && dist > 13 && !this.harmless) this.goto(P.x, P.z, 0.9, dt);
         if (this.harmless) {
           if ((dist < 11 && looking) || this.watchT < -6) { this.despawn(); return; }
         } else if (this.watchT <= 0 || dist < 9) {
@@ -271,7 +278,8 @@ export class Observer {
         break;
       }
       case 'patrol': {
-        const arrived = this.goto(this.target.x, this.target.z, 1.8, dt);
+        // Velocidad de patrulla lenta (1.1 m/s)
+        const arrived = this.goto(this.target.x, this.target.z, 1.1, dt);
         if (arrived) {
           this.timer += dt; this.idleLook += dt;
           if (this.timer > 3 + Math.random()) this.pickWaypoint();
@@ -279,7 +287,8 @@ export class Observer {
         break;
       }
       case 'investigate': {
-        const arrived = this.goto(this.target.x, this.target.z, 2.8, dt);
+        // Velocidad de acecho (1.6 m/s)
+        const arrived = this.goto(this.target.x, this.target.z, 1.6, dt);
         if (arrived) {
           this.timer += dt;
           if (this.timer > 2.5) { this.state = 'search'; this.searchLeft = 9; this.sniffT = 0; }
@@ -291,7 +300,10 @@ export class Observer {
         if (canSee) this.lostT = 0;
         else if (P.hidden || Math.hypot(this.lastSeen.x - this.x, this.lastSeen.z - this.z) < 1.6) this.lostT += dt;
         else this.lostT += dt * 0.15;
-        const sp = Math.min(5.6, 4.3 + this.chaseT * 0.12);
+
+        // VELOCIDAD DE PERSECUCIÓN AJUSTADA: Empieza en 2.8 y sube máximo a 3.4 m/s (puedes correr para escapar)
+        const sp = Math.min(3.4, 2.8 + this.chaseT * 0.03);
+
         if (P.hidden) {
           if (g.hideSeen) {
             const arrived = this.goto(P.hidden.x, P.hidden.z, sp, dt);
@@ -305,7 +317,7 @@ export class Observer {
         }
         const tx = canSee ? P.x : this.lastSeen.x, tz = canSee ? P.z : this.lastSeen.z;
         this.goto(tx, tz, sp, dt);
-        if (dist < 1.9 && this.hasLOS && this.attackCd <= 0) { this.state = 'attack'; this.attackT = 0; }
+        if (dist < 2.0 && this.hasLOS && this.attackCd <= 0) { this.state = 'attack'; this.attackT = 0; }
         if (this.lostT > 6) {
           this.state = 'search'; this.searchLeft = 10; this.sniffT = 0; this.target = { x: this.lastSeen.x, z: this.lastSeen.z };
           g.onEnemyLost();
@@ -315,7 +327,7 @@ export class Observer {
       case 'attack': {
         this.attackT += dt;
         this.yaw = turn(this.yaw, Math.atan2(-dx, -dz), 8 * dt);
-        if (this.attackT > 0.38 && this.attackCd <= 0) {
+        if (this.attackT > 0.35 && this.attackCd <= 0) {
           this.attackCd = 1.3;
           if (dist < 2.4 && !P.hidden) g.damage(26, this.x, this.z);
           g.audio.creatureCall({ x: this.x, y: 2, z: this.z }, 0.5);
@@ -325,7 +337,7 @@ export class Observer {
       }
       case 'search': {
         this.searchLeft -= dt;
-        const arrived = this.goto(this.target.x, this.target.z, 2.3, dt);
+        const arrived = this.goto(this.target.x, this.target.z, 1.3, dt);
         const nearHide = P.hidden && Math.hypot(P.hidden.x - this.x, P.hidden.z - this.z) < 3.2;
         if (nearHide) {
           this.sniffT += dt; g.nearHideTension = Math.min(1, this.sniffT / 4);
@@ -351,22 +363,18 @@ export class Observer {
 
     if (dist > 90 && this.state !== 'chase') { this.despawn(); return; }
 
-    if (this.speedNow > 0.1) {
-      if (this.state === 'chase') this.playAnim('run');
-      else this.playAnim('walk');
-    } else {
-      if (this.state === 'attack') this.playAnim('attack');
-      else this.playAnim('idle');
-    }
+    // ========================================================================
+    // ANIMACIÓN PROCEDURAL DE CAMINATA / ACECHO / ATAQUE
+    // ========================================================================
+    this.animateMotion(dt, time);
 
-    if (this.mixer) this.mixer.update(dt);
-
+    // Sonidos de pasos pesados al avanzar
     if (this.speedNow > 0.1) {
-      this.stepPhase += dt * this.speedNow * 1.55;
+      this.stepPhase += dt * this.speedNow * 2.5;
       const cyc = Math.floor(this.stepPhase / Math.PI);
       if (cyc !== this.lastStep) {
         this.lastStep = cyc;
-        if (dist < 45) g.audio.heavyStep({ x: this.x, y: 0.1, z: this.z }, Math.min(0.8, 0.25 + this.speedNow * 0.1));
+        if (dist < 45) g.audio.heavyStep({ x: this.x, y: 0.1, z: this.z }, Math.min(0.8, 0.3 + this.speedNow * 0.1));
       }
     }
 
@@ -381,6 +389,44 @@ export class Observer {
 
     this.group.position.set(this.x, 0, this.z);
     this.group.rotation.y = this.yaw;
+  }
+
+  // Genera caminata viva con bamboleo de hombros, respiración y zancadas
+  private animateMotion(dt: number, time: number) {
+    if (this.mixer) this.mixer.update(dt);
+
+    const isMoving = this.speedNow > 0.1;
+    const isChasing = this.state === 'chase';
+    const isAttacking = this.state === 'attack';
+
+    if (isAttacking) {
+      // Embestida hacia adelante al golpear
+      const prog = Math.min(1, this.attackT / 0.4);
+      const strike = Math.sin(prog * Math.PI);
+      this.wrapper.position.z = strike * 0.45;
+      this.wrapper.rotation.x = -strike * 0.25;
+      this.wrapper.rotation.z = 0;
+    } else if (isMoving) {
+      // Marcha pesada: sube y baja al dar pasos y se balancea de izquierda a derecha
+      const stepSpeed = isChasing ? 6.2 : 4.2;
+      const stepCycle = time * stepSpeed;
+
+      const bobY = Math.abs(Math.sin(stepCycle)) * (isChasing ? 0.08 : 0.045);
+      const swayZ = Math.sin(stepCycle) * (isChasing ? 0.09 : 0.05);
+      const leanX = isChasing ? 0.18 : 0.06; // Se inclina hacia adelante al correr
+
+      this.wrapper.position.y = -bobY;
+      this.wrapper.position.z = 0;
+      this.wrapper.rotation.z = swayZ;
+      this.wrapper.rotation.x = leanX;
+    } else {
+      // Respiración siniestra y suave cuando está quieto
+      const breath = Math.sin(time * 1.8) * 0.02;
+      this.wrapper.position.y = breath;
+      this.wrapper.position.z = 0;
+      this.wrapper.rotation.z = Math.sin(time * 0.9) * 0.02;
+      this.wrapper.rotation.x = Math.sin(time * 1.3) * 0.02;
+    }
   }
 }
 
