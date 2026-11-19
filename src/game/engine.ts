@@ -1,4 +1,4 @@
-typescript
+
 import * as THREE from 'three';
 import { audio } from './audio';
 import { buildMaterials, softCircle, type Mats } from './textures';
