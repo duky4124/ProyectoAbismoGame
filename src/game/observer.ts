@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { Game } from './engine';
 import { CELL } from './world';
 
@@ -13,16 +14,11 @@ export class Observer {
   threat = 0;
   harmless = false;
 
-  private body = new THREE.Group();
-  private legs: { hip: THREE.Group; knee: THREE.Group }[] = [];
-  private arms: { sh: THREE.Group; el: THREE.Group }[] = [];
-  private head = new THREE.Group();
-  private chest!: THREE.Mesh;
-  private eyes: THREE.Mesh[] = [];
+  private model: THREE.Group | null = null;
+  private mixer: THREE.AnimationMixer | null = null;
+  private actions: { [key: string]: THREE.AnimationAction } = {};
+  private currentAction: THREE.AnimationAction | null = null;
 
-  private phase = 0;
-  private lastStep = 0;
-  private lean = 0;
   private timer = 0;
   private lastSeen = { x: 0, z: 0 };
   private target = { x: 0, z: 0 };
@@ -41,293 +37,53 @@ export class Observer {
   private lightLevel = 0;
   private speedNow = 0;
   private spawnT = 0;
+  private stepPhase = 0;
+  private lastStep = 0;
 
   constructor(private g: Game) {
-    // ========================================================================
-    // MATERIALES PROFESIONALES (PIEL PÁLIDA TIPO SCP / WENDIGO)
-    // ========================================================================
-    const skinMat = new THREE.MeshStandardMaterial({
-      color: 0xedeae2,       // Blanco tiza cadavérico
-      roughness: 0.38,       // Ligero brillo húmedo de piel enfermiza
-      metalness: 0.05,
-      emissive: 0x1f1d1a,     // Suave auto-iluminación para resaltar en la niebla
-    });
+    const loader = new GLTFLoader();
 
-    const boneMat = new THREE.MeshStandardMaterial({
-      color: 0xf5f3ee,
-      roughness: 0.25,
-      metalness: 0.1,
-    });
+    loader.load(
+      '/models/monster.glb',
+      (gltf) => {
+        this.model = gltf.scene;
+        this.model.scale.setScalar(1.2); // Escala para ajustarlo a los túneles del juego
+        this.model.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            child.castShadow = true;
+          }
+        });
+        this.group.add(this.model);
 
-    const voidDark = new THREE.MeshBasicMaterial({
-      color: 0x020202,       // Negro abisal para huecos de ojos y garganta
-    });
-
-    const fleshMat = new THREE.MeshStandardMaterial({
-      color: 0x3d1a24,       // Tono amoratado/tendinoso para articulaciones
-      roughness: 0.45,
-      emissive: 0x140408,
-    });
-
-    const clawMat = new THREE.MeshStandardMaterial({
-      color: 0x111113,       // Obsidiana pulida para garras
-      roughness: 0.15,
-      metalness: 0.4,
-    });
-
-    const eyeMat = new THREE.MeshBasicMaterial({
-      color: 0xff1100,       // Ojos rojos penetrantes
-    });
-
-    this.group.add(this.body);
-
-    // ========================================================================
-    // TORSO Y ESPALDA ANATÓMICA
-    // ========================================================================
-    // Pelvis huesuda en 'V'
-    const pelvis = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.12, 0.24, 7), skinMat);
-    pelvis.position.y = 1.48;
-    pelvis.scale.set(1.1, 1, 0.7);
-    this.body.add(pelvis);
-
-    // Columna vertebral lumbar
-    const lowerSpine = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.08, 0.42, 6), boneMat);
-    lowerSpine.position.set(0, 1.72, 0.02);
-    this.body.add(lowerSpine);
-
-    // Tórax principal
-    this.chest = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.14, 0.85, 9), skinMat);
-    this.chest.scale.set(1.1, 1.0, 0.62);
-    this.chest.position.set(0, 2.15, -0.02);
-    this.chest.castShadow = true;
-    this.body.add(this.chest);
-
-    // Esternón frontal
-    const sternum = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.45, 0.03), boneMat);
-    sternum.position.set(0, 2.2, -0.16);
-    this.body.add(sternum);
-
-    // Costillas prominentes (8 costillas marcadas a los costados)
-    for (let i = 0; i < 8; i++) {
-      const ribW = 0.19 - i * 0.008;
-      const rib = new THREE.Mesh(new THREE.TorusGeometry(ribW, 0.012, 5, 14, Math.PI * 0.95), boneMat);
-      rib.rotation.set(Math.PI / 2 + 0.1, 0, Math.PI / 2);
-      rib.scale.set(1, 0.65, 1);
-      rib.position.set(0, 1.82 + i * 0.075, -0.01);
-      this.body.add(rib);
-    }
-
-    // Vértebras afiladas sobresaliendo por la espalda
-    for (let i = 0; i < 9; i++) {
-      const vert = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.16, 4), boneMat);
-      vert.rotation.x = Math.PI / 2 + 0.25;
-      vert.position.set(0, 1.62 + i * 0.11, 0.12 + Math.sin(i * 0.3) * 0.02);
-      this.body.add(vert);
-    }
-
-    // Clavículas prominentes en los hombros
-    for (const sx of [-1, 1]) {
-      const clavicle = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.022, 0.26, 5), boneMat);
-      clavicle.position.set(sx * 0.13, 2.48, -0.08);
-      clavicle.rotation.z = sx * 1.35;
-      clavicle.rotation.y = sx * 0.3;
-      this.body.add(clavicle);
-    }
-
-    // ========================================================================
-    // CUELLO Y CABEZA
-    // ========================================================================
-    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 0.34, 8), skinMat);
-    neck.position.set(0, 2.65, -0.02);
-    neck.rotation.x = -0.15; // Cuello estirado hacia adelante
-    this.body.add(neck);
-
-    // Tendones laterales del cuello
-    for (const sx of [-1, 1]) {
-      const tendon = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.02, 0.28, 4), fleshMat);
-      tendon.position.set(sx * 0.065, 2.64, -0.03);
-      tendon.rotation.z = sx * 0.12;
-      this.body.add(tendon);
-    }
-
-    this.head.position.set(0, 2.85, -0.06);
-    this.body.add(this.head);
-
-    // Bóveda craneal alargada hacia atrás
-    const cranium = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), skinMat);
-    cranium.scale.set(0.72, 1.25, 1.2);
-    cranium.rotation.x = -0.22;
-    cranium.castShadow = true;
-    this.head.add(cranium);
-
-    // Pómulos afilados (Zygomatic)
-    for (const sx of [-1, 1]) {
-      const cheek = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.12, 4), boneMat);
-      cheek.position.set(sx * 0.10, 0.02, -0.14);
-      cheek.rotation.set(-0.4, 0, sx * 0.4);
-      this.head.add(cheek);
-    }
-
-    // Cuencas oculares profundas y cavernosas
-    for (const sx of [-1, 1]) {
-      const socket = new THREE.Mesh(new THREE.SphereGeometry(0.048, 8, 6), voidDark);
-      socket.position.set(sx * 0.065, 0.06, -0.17);
-      socket.scale.set(1.0, 1.4, 0.8);
-      this.head.add(socket);
-
-      // Ojos hundidos y brillantes
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 5), eyeMat);
-      eye.position.set(sx * 0.065, 0.055, -0.19);
-      this.head.add(eye);
-      this.eyes.push(eye);
-    }
-
-    // Mandíbula desencajada alargada (Scream grotesco)
-    const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.22, 0.16), skinMat);
-    jaw.position.set(0, -0.16, -0.12);
-    jaw.rotation.x = 0.25;
-    this.head.add(jaw);
-
-    // Cavidad bucal profunda
-    const mouthVoid = new THREE.Mesh(new THREE.BoxGeometry(0.065, 0.18, 0.12), voidDark);
-    mouthVoid.position.set(0, -0.14, -0.16);
-    this.head.add(mouthVoid);
-
-    // Dientes afilados de aguja
-    for (let t = 0; t < 6; t++) {
-      const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.006, 0.03, 3), boneMat);
-      tooth.position.set((t - 2.5) * 0.012, -0.06, -0.21);
-      tooth.rotation.x = Math.PI;
-      this.head.add(tooth);
-
-      const bTooth = tooth.clone();
-      bTooth.position.set((t - 2.5) * 0.011, -0.21, -0.19);
-      bTooth.rotation.x = 0;
-      this.head.add(bTooth);
-    }
-
-    // ========================================================================
-    // PIERNAS CON RÓTULA Y TALÓN
-    // ========================================================================
-    for (const sx of [-1, 1]) {
-      const hip = new THREE.Group();
-      hip.position.set(sx * 0.14, 1.42, 0);
-      this.body.add(hip);
-
-      // Muslo (fémur estilizado)
-      const thigh = this.createAnatomicalBone(0.72, 0.075, 0.05, skinMat, boneMat);
-      hip.add(thigh);
-
-      // Rodilla
-      const knee = new THREE.Group();
-      knee.position.y = -0.72;
-      hip.add(knee);
-
-      const patella = new THREE.Mesh(new THREE.SphereGeometry(0.038, 6, 6), boneMat);
-      patella.position.set(0, 0, -0.04);
-      knee.add(patella);
-
-      // Pantorrilla con relieve
-      const shin = this.createAnatomicalBone(0.74, 0.05, 0.035, skinMat, boneMat);
-      knee.add(shin);
-
-      // Pie largo con garras
-      const foot = new THREE.Group();
-      foot.position.set(0, -0.75, 0);
-      knee.add(foot);
-
-      const footBone = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.04, 0.28), skinMat);
-      footBone.position.set(0, 0.02, -0.1);
-      foot.add(footBone);
-
-      // 3 Garras en los dedos de los pies
-      for (let toe = 0; toe < 3; toe++) {
-        const claw = new THREE.Mesh(new THREE.ConeGeometry(0.012, 0.08, 4), clawMat);
-        claw.rotation.x = Math.PI / 2 + 0.3;
-        claw.position.set((toe - 1) * 0.026, 0.01, -0.26);
-        foot.add(claw);
-      }
-
-      this.legs.push({ hip, knee });
-    }
-
-    // ========================================================================
-    // BRAZOS HIPER-ALARGADOS CON GARRAS DE PRESA
-    // ========================================================================
-    for (const sx of [-1, 1]) {
-      const sh = new THREE.Group();
-      sh.position.set(sx * 0.26, 2.45, -0.02);
-      this.body.add(sh);
-
-      // Hombro / Deltoides
-      const deltoid = new THREE.Mesh(new THREE.SphereGeometry(0.065, 8, 6), skinMat);
-      deltoid.scale.set(1, 1.2, 1);
-      sh.add(deltoid);
-
-      // Brazo superior (Húmero)
-      const uArm = this.createAnatomicalBone(0.85, 0.06, 0.042, skinMat, boneMat);
-      sh.add(uArm);
-
-      // Codo articulado con espolón óseo
-      const el = new THREE.Group();
-      el.position.y = -0.85;
-      sh.add(el);
-
-      const elbowBone = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.09, 4), boneMat);
-      elbowBone.rotation.x = -Math.PI / 2 - 0.2;
-      elbowBone.position.set(0, 0, 0.035);
-      el.add(elbowBone);
-
-      // Antebrazo (Radio y Cúbito delgados)
-      const fArm = this.createAnatomicalBone(0.95, 0.042, 0.028, skinMat, boneMat);
-      el.add(fArm);
-
-      // Mano huesuda con 5 dedos hiper-alargados
-      const palm = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.12, 0.02), skinMat);
-      palm.position.set(0, -1.0, 0);
-      el.add(palm);
-
-      for (let f = 0; f < 5; f++) {
-        const finger = new THREE.Group();
-        finger.position.set((f - 2) * 0.02, -1.06, 0);
-
-        // Falange
-        const phalanx = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.011, 0.22, 4), boneMat);
-        phalanx.position.y = -0.11;
-        phalanx.rotation.x = 0.12;
-        finger.add(phalanx);
-
-        // Garra afilada en la punta
-        const tip = new THREE.Mesh(new THREE.ConeGeometry(0.009, 0.12, 4), clawMat);
-        tip.position.set(0, -0.26, 0.025);
-        tip.rotation.x = Math.PI + 0.35; // Curvada hacia adentro
-        finger.add(tip);
-
-        el.add(finger);
-      }
-
-      this.arms.push({ sh, el });
-    }
+        // Guardamos las animaciones disponibles
+        if (gltf.animations.length > 0) {
+          this.mixer = new THREE.AnimationMixer(this.model);
+          gltf.animations.forEach((clip) => {
+            const name = clip.name.toLowerCase();
+            this.actions[name] = this.mixer!.clipAction(clip);
+          });
+          // Reproduce la primera animación por defecto (suele ser Idle)
+          this.playAnim('idle');
+        }
+      },
+      undefined,
+      (err) => console.error('Error cargando monstruo en partida:', err)
+    );
 
     this.group.visible = false;
     g.level.add(this.group);
   }
 
-  // Creador de extremidad con articulaciones anatómicas
-  private createAnatomicalBone(len: number, rTop: number, rBot: number, skinMat: THREE.Material, boneMat: THREE.Material): THREE.Group {
-    const grp = new THREE.Group();
-    // Eje principal
-    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(rBot, rTop, len, 8), skinMat);
-    shaft.position.y = -len / 2;
-    shaft.castShadow = true;
-    grp.add(shaft);
+  private playAnim(name: string) {
+    if (!this.mixer) return;
+    const target = this.actions[name] || Object.values(this.actions)[0];
+    if (!target || target === this.currentAction) return;
 
-    // Cóndilo / articulación en el extremo superior
-    const joint = new THREE.Mesh(new THREE.SphereGeometry(rTop * 1.12, 6, 6), boneMat);
-    joint.position.y = -0.02;
-    grp.add(joint);
-
-    return grp;
+    if (this.currentAction) {
+      this.currentAction.fadeOut(0.25);
+    }
+    target.reset().fadeIn(0.25).play();
+    this.currentAction = target;
   }
 
   private canPass = (x: number, y: number) => {
@@ -342,12 +98,11 @@ export class Observer {
   spawn(x: number, z: number, mode: 'watch' | 'patrol' | 'chase' | 'investigate', opts: { harmless?: boolean; yawToPlayer?: boolean } = {}) {
     this.x = x; this.z = z; this.harmless = !!opts.harmless;
     this.group.visible = true; this.detect = 0; this.attackCd = 1.0; this.spawnT = 0;
-    this.field = null; this.fieldKey = -1; this.lean = 0;
+    this.field = null; this.fieldKey = -1;
     const P = this.g.P;
     this.yaw = Math.atan2(-(P.x - x), -(P.z - z));
     this.group.position.set(x, 0, z);
     this.group.rotation.y = this.yaw;
-
     if (mode === 'watch') { this.state = 'watch'; this.watchT = 5 + Math.random() * 5; }
     else if (mode === 'chase') { this.startChase(); }
     else if (mode === 'investigate') { this.state = 'investigate'; this.target = { x: P.x, z: P.z }; }
@@ -407,7 +162,6 @@ export class Observer {
     const dist = Math.hypot(tx - this.x, tz - this.z);
     if (dist < 0.5) return true;
     let mx = tx, mz = tz;
-
     if (!(dist < 18 && w.los(this.x, this.z, tx, tz))) {
       const tcx = Math.floor(tx / CELL), tcy = Math.floor(tz / CELL);
       const key = tcy * w.w + tcx; this.fieldAge += dt;
@@ -432,7 +186,6 @@ export class Observer {
       if (best < 0) return cur === 0 || cur < 0;
       mx = (bx + 0.5) * CELL; mz = (by + 0.5) * CELL;
     }
-
     const dx0 = mx - this.x, dz0 = mz - this.z;
     const dl = Math.hypot(dx0, dz0) || 1;
     const px = this.x + (dx0 / dl) * 1.4, pz = this.z + (dz0 / dl) * 1.4;
@@ -458,7 +211,6 @@ export class Observer {
     const dist = Math.hypot(dx, dz);
     this.spawnT += dt; this.attackCd -= dt;
     this.speedNow = 0;
-
     this.hasLOS = w.los(this.x, this.z, P.x, P.z);
     const fwdx = -Math.sin(this.yaw), fwdz = -Math.cos(this.yaw);
     const dot = dist > 0.01 ? (dx * fwdx + dz * fwdz) / dist : 1;
@@ -477,7 +229,6 @@ export class Observer {
         this.detect = Math.min(1.2, this.detect + rate * dt);
       } else this.detect = Math.max(0, this.detect - dt * (this.state === 'chase' ? 0.1 : 0.35));
     }
-
     if (canSee) this.lastSeen = { x: P.x, z: P.z };
     this.threat = this.chasing ? 2 : (this.state !== 'patrol' || this.hasLOS) && (this.detect > 0.25 || (this.hasLOS && dist < 24)) ? 1 : (this.state === 'investigate' ? 1 : 0);
     if (this.detect >= 1 && !this.chasing && !(this.state === 'watch' && this.harmless)) this.startChase();
@@ -521,7 +272,6 @@ export class Observer {
         if (canSee) this.lostT = 0;
         else if (P.hidden || Math.hypot(this.lastSeen.x - this.x, this.lastSeen.z - this.z) < 1.6) this.lostT += dt;
         else this.lostT += dt * 0.15;
-
         const sp = Math.min(5.6, 4.3 + this.chaseT * 0.12);
         if (P.hidden) {
           if (g.hideSeen) {
@@ -534,7 +284,6 @@ export class Observer {
           }
           break;
         }
-
         const tx = canSee ? P.x : this.lastSeen.x, tz = canSee ? P.z : this.lastSeen.z;
         this.goto(tx, tz, sp, dt);
         if (dist < 1.9 && this.hasLOS && this.attackCd <= 0) { this.state = 'attack'; this.attackT = 0; }
@@ -565,7 +314,6 @@ export class Observer {
             g.grabPlayer(this); this.searchLeft = 5; this.sniffT = 0;
           }
         } else g.nearHideTension = 0;
-
         if (arrived) {
           this.timer += dt;
           if (this.timer > 1.8) {
@@ -583,62 +331,25 @@ export class Observer {
     }
 
     if (dist > 90 && this.state !== 'chase') { this.despawn(); return; }
-    this.animate(dt, time, dist);
-  }
 
-  private animate(dt: number, time: number, dist: number) {
-    const g = this.g;
-    const spd = this.speedNow;
-    const moving = spd > 0.1;
-    this.phase += dt * spd * 1.55;
-    const run = this.state === 'chase' ? 1 : 0;
-    const amp = moving ? Math.min(0.95, 0.25 + spd * 0.16) : 0;
-    const s = Math.sin(this.phase);
+    // Control de animaciones según el estado y velocidad
+    if (this.speedNow > 0.1) {
+      if (this.state === 'chase') this.playAnim('run');
+      else this.playAnim('walk');
+    } else {
+      if (this.state === 'attack') this.playAnim('attack');
+      else this.playAnim('idle');
+    }
 
-    this.legs.forEach((l, i) => {
-      const ph = i ? s : -s;
-      l.hip.rotation.x = ph * amp;
-      l.knee.rotation.x = moving ? Math.max(0, (i ? Math.cos(this.phase) : -Math.cos(this.phase))) * amp * 1.3 + 0.05 : 0.04;
-    });
+    if (this.mixer) this.mixer.update(dt);
 
-    const attack = this.state === 'attack';
-    const aw = attack ? Math.min(1, this.attackT / 0.35) : 0;
-
-    this.arms.forEach((a, i) => {
-      const ph = i ? -s : s;
-      const sw = moving ? ph * amp * 0.9 : Math.sin(time * 0.8 + i) * 0.03;
-      a.sh.rotation.x = attack ? -1.5 * aw + 0.2 : sw + (run ? 0.5 : 0);
-      a.sh.rotation.z = (i ? -1 : 1) * (0.05 + (attack ? 0.35 * aw : 0) + Math.sin(time * 1.3 + i * 2) * 0.02);
-      a.el.rotation.x = attack ? -0.4 : -0.15 - (moving ? Math.max(0, ph) * 0.4 : 0) - (run ? 0.6 : 0);
-    });
-
-    const targetLean = this.state === 'chase' ? 0.38 : this.state === 'investigate' ? 0.14 : moving ? 0.06 : 0;
-    this.lean += (targetLean - this.lean) * Math.min(1, dt * 5);
-    this.body.rotation.x = -this.lean + (attack ? -0.25 * aw : 0);
-    this.body.position.y = moving ? Math.abs(Math.sin(this.phase)) * 0.06 - 0.03 : Math.sin(time * 1.1) * 0.012;
-    this.chest.scale.x = 1 + Math.sin(time * 1.6) * 0.03;
-
-    const P = g.P;
-    const headYawWorld = Math.atan2(-(P.x - this.x), -(P.z - this.z));
-    let rel = wrapAngle(headYawWorld - this.yaw);
-    const lookAt = (this.state === 'watch' || this.state === 'chase' || this.state === 'attack' || (this.hasLOS && dist < 22)) && Math.abs(rel) < 1.6;
-    const wantH = lookAt ? rel : Math.sin(time * 0.5) * 0.4;
-    this.head.rotation.y += (wantH - this.head.rotation.y) * Math.min(1, dt * 6);
-    const tilt = this.state === 'watch' ? 0.35 + Math.sin(time * 0.7) * 0.12 : this.state === 'investigate' ? 0.15 : 0;
-    this.head.rotation.z += (tilt - this.head.rotation.z) * Math.min(1, dt * 3);
-    if (this.state === 'patrol' && Math.random() < dt * 0.4) this.head.rotation.y += (Math.random() - 0.5) * 0.8;
-
-    const em = this.chasing ? 1 : 0.5 + Math.sin(time * 5) * 0.2;
-    this.eyes.forEach((e) => e.scale.setScalar(em * 1.2 + 0.2));
-
-    this.group.position.set(this.x, 0, this.z);
-    this.group.rotation.y = this.yaw;
-
-    if (moving) {
-      const cyc = Math.floor(this.phase / Math.PI);
+    // Sonidos de pasos y crujidos al desplazarse
+    if (this.speedNow > 0.1) {
+      this.stepPhase += dt * this.speedNow * 1.55;
+      const cyc = Math.floor(this.stepPhase / Math.PI);
       if (cyc !== this.lastStep) {
         this.lastStep = cyc;
-        if (dist < 45) g.audio.heavyStep({ x: this.x, y: 0.1, z: this.z }, Math.min(0.8, 0.25 + spd * 0.1));
+        if (dist < 45) g.audio.heavyStep({ x: this.x, y: 0.1, z: this.z }, Math.min(0.8, 0.25 + this.speedNow * 0.1));
       }
     }
 
@@ -650,6 +361,9 @@ export class Observer {
 
     const prox = Math.max(0, 1 - dist / 35);
     g.audio.enemyBedUpdate({ x: this.x, y: 2, z: this.z }, prox * (this.chasing ? 1.4 : 0.8));
+
+    this.group.position.set(this.x, 0, this.z);
+    this.group.rotation.y = this.yaw;
   }
 }
 
