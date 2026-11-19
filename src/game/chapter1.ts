@@ -20,24 +20,14 @@ export function buildChapter1(arg: any) {
       } catch (_) {}
     };
 
-    // --- ARQUITECTURA DE LA SALA ---
-    box('metal', 0, -0.1, 0, 18, 0.2, 30);      // Suelo
-    box('dark', 0, 4.0, 0, 18, 0.2, 30);        // Techo
-    box('concrete', -9, 2.0, 0, 0.4, 4.0, 30);  // Pared izq
-    box('concrete', 9, 2.0, 0, 0.4, 4.0, 30);   // Pared der
-    box('concrete', 0, 2.0, -15, 18, 4.0, 0.4); // Pared fondo
+    // Estructura de la sala
+    box('metal', 0, -0.1, 0, 18, 0.2, 30);
+    box('dark', 0, 4.0, 0, 18, 0.2, 30);
+    box('concrete', -9, 2.0, 0, 0.4, 4.0, 30);
+    box('concrete', 9, 2.0, 0, 0.4, 4.0, 30);
+    box('concrete', 0, 2.0, -15, 18, 4.0, 0.4);
 
-    // --- VEHÍCULO ACCIDENTADO ---
-    box('dark', 0, 0.6, 11, 3.2, 1.2, 4.8);
-    box('metal', 0, 1.4, 11, 2.6, 0.4, 3.6);
-    box('rust', -1.8, 1.5, 13.8, 2.4, 3.2, 0.3);
-    box('rust', 1.8, 1.3, 14.1, 2.2, 2.8, 0.3);
-
-    // Escombros
-    box('metal', -2.5, 0.2, 9.5, 1.2, 0.4, 0.8);
-    box('rust', 2.2, 0.15, 10.2, 0.9, 0.3, 1.1);
-
-    // --- CASILLEROS (Con rendija limpia para no obstruir la vista) ---
+    // Casilleros (Rendija libre a 1.55m para no tapar la vista del jugador)
     const makeLocker = (x: number, y: number, z: number) => {
       box('dark', x, y + 1.2, z, 0.9, 2.4, 0.9);
       box('metal', x + 0.46, y + 0.65, z, 0.05, 1.3, 0.8);
@@ -49,16 +39,15 @@ export function buildChapter1(arg: any) {
     makeLocker(-7.5, 0, 2.0);
     makeLocker(-7.5, 0, 3.5);
 
-    // --- LUCES ---
+    // Luces
     if (typeof W.light === 'function') {
       try {
         W.light(0, 3.0, 10, '#ff3333', 1.8, 12);
         W.light(0, 3.5, 0, '#336688', 1.2, 16);
-        W.light(0, 3.5, -10, '#225577', 1.0, 16);
       } catch (_) {}
     }
 
-    // --- ITEMS INTERACTIVOS ---
+    // Items
     if (typeof W.item === 'function') {
       try {
         box('metal', 3.0, 0.4, 8.0, 1.0, 0.8, 1.0);
@@ -67,12 +56,12 @@ export function buildChapter1(arg: any) {
       } catch (_) {}
     }
 
-    // --- SPAWN ---
+    // Spawn del jugador
     if (typeof W.setSpawn === 'function') {
       try { W.setSpawn(0, 1.0, 7.5, Math.PI); } catch (_) {}
     }
   } catch (err) {
-    console.warn('buildChapter1 caught:', err);
+    console.warn('buildChapter1 guard:', err);
   }
 }
 
