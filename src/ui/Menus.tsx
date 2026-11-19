@@ -10,7 +10,7 @@ export function fmtTime(s: number) {
 }
 
 // ============================================================================
-// COMPONENTE 3D: MONSTRUO VIVO EN EL MENÚ (Respiración, acecho y ojos pulsantes)
+// COMPONENTE 3D: MONSTRUO MIRANDO DE FRENTE CON ANIMACIÓN DE ACECHO
 // ============================================================================
 function ObserverMenu3D() {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -22,28 +22,24 @@ function ObserverMenu3D() {
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(40, container.clientWidth / container.clientHeight, 0.1, 50);
     camera.position.set(0, 1.4, 4.5);
-    camera.lookAt(0.8, 1.2, 0);
+    camera.lookAt(0.7, 1.2, 0);
 
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(renderer.domElement);
 
-    // Luces dramáticas
-    const ambientLight = new THREE.AmbientLight(0x334455, 0.8);
+    // Luces potentes enfocadas de frente a la cara y torso
+    const ambientLight = new THREE.AmbientLight(0x334455, 0.9);
     scene.add(ambientLight);
 
-    const keyLight = new THREE.DirectionalLight(0xffffff, 2.0);
-    keyLight.position.set(2, 4, 5);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
+    keyLight.position.set(1, 3, 5); // Iluminación frontal
     scene.add(keyLight);
 
     const redRimLight = new THREE.PointLight(0xff1100, 5, 12);
-    redRimLight.position.set(3, 2.5, 2);
+    redRimLight.position.set(2.5, 2.2, 2);
     scene.add(redRimLight);
-
-    const blueFill = new THREE.PointLight(0x0066ff, 2, 10);
-    blueFill.position.set(-2, 2, 3);
-    scene.add(blueFill);
 
     let mixer: THREE.AnimationMixer | null = null;
     let model: THREE.Group | null = null;
@@ -57,7 +53,7 @@ function ObserverMenu3D() {
       (gltf) => {
         model = gltf.scene;
 
-        // Auto-escalado a 2.6m
+        // Auto-escalado a 2.6m de altura
         const box = new THREE.Box3().setFromObject(model);
         const size = box.getSize(new THREE.Vector3());
         const center = box.getCenter(new THREE.Vector3());
@@ -65,14 +61,14 @@ function ObserverMenu3D() {
         const scale = targetHeight / (size.y || 1);
         model.scale.setScalar(scale);
 
-        // Centrar pies en el suelo
+        // Apoyar pies en el suelo
         box.setFromObject(model);
         box.getCenter(center);
         model.position.x = -center.x;
         model.position.y = -box.min.y;
         model.position.z = -center.z;
 
-        // Buscar materiales de ojos rojos para hacerlos pulsar
+        // Detectar ojos para que pulsen en rojo
         model.traverse((child) => {
           if ((child as THREE.Mesh).isMesh) {
             const mesh = child as THREE.Mesh;
@@ -87,19 +83,17 @@ function ObserverMenu3D() {
           }
         });
 
-        // Wrapper para poder girarlo 180° (que mire al frente) y animarlo
         pivot = new THREE.Group();
         pivot.add(model);
-        pivot.rotation.y = Math.PI; // Mirar hacia la cámara/jugador
 
-        // Posición a la derecha, ligeramente agachado (pose de acecho)
+        // CORRECCIÓN: Mirar hacia la cámara / centro del menú
+        pivot.rotation.y = -0.35; 
         pivot.position.set(1.4, -0.1, 0.3);
-        pivot.rotation.z = 0.08; // Inclinación lateral sutil
-        pivot.rotation.x = 0.12; // Inclinación hacia adelante (agachado)
+        pivot.rotation.x = 0.08; // Leve inclinación acechante hacia adelante
 
         scene.add(pivot);
 
-        // Si el GLB tiene animaciones internas, las reproducimos
+        // Si el GLB incluye animaciones
         if (gltf.animations.length > 0) {
           mixer = new THREE.AnimationMixer(model);
           const action = mixer.clipAction(gltf.animations[0]);
@@ -121,27 +115,22 @@ function ObserverMenu3D() {
       if (mixer) mixer.update(dt);
 
       if (pivot && model) {
-        // 1. RESPIRACIÓN: escala sutil del cuerpo
+        // 1. Respiración del pecho (se infla y desinfla sutilmente)
         const breath = Math.sin(t * 1.6) * 0.02;
         pivot.scale.y = 1 + breath;
         pivot.scale.x = 1 - breath * 0.5;
-        pivot.scale.z = 1 - breath * 0.5;
 
-        // 2. MOVIMIENTO DE CABEZA/ACECHO: gira lentamente como buscando
-        // Gira la cabeza (Y) de lado a lado lentamente
-        pivot.rotation.y = Math.PI + Math.sin(t * 0.4) * 0.25;
-        // Inclinación de cabeza (Z) sutil
-        pivot.rotation.z = 0.08 + Math.sin(t * 0.7) * 0.04;
-        // Inclinación hacia adelante/atrás (X) - como si estuviera agachado respirando
-        pivot.rotation.x = 0.12 + Math.sin(t * 0.5) * 0.03;
+        // 2. Mirada acechante: mueve la cabeza evaluando al jugador
+        pivot.rotation.y = -0.35 + Math.sin(t * 0.5) * 0.22;
+        pivot.rotation.z = Math.sin(t * 0.8) * 0.03;
+        pivot.rotation.x = 0.08 + Math.sin(t * 0.6) * 0.03;
 
-        // 3. LEVANTARSE Y AGACHARSE: movimiento vertical sutil de acecho
-        const crouch = Math.sin(t * 0.3) * 0.05;
-        pivot.position.y = -0.1 + crouch;
+        // 3. Pequeño balanceo vertical al respirar
+        pivot.position.y = -0.1 + Math.sin(t * 1.6) * 0.02;
 
-        // 4. OJOS PULSANTES ROJOS
+        // 4. Pulso de ojos rojos
         eyeMaterials.forEach((mat) => {
-          mat.emissiveIntensity = 2.5 + Math.sin(t * 4) * 2 + Math.random() * 0.5;
+          mat.emissiveIntensity = 2.5 + Math.sin(t * 4) * 2;
         });
       }
 
@@ -169,7 +158,6 @@ function ObserverMenu3D() {
 
   return <div ref={mountRef} className="absolute inset-0 pointer-events-none z-[2]" />;
 }
-
 // ============================================================================
 // MENU BACKDROP (FONDO POR CÓDIGO + BICHO)
 // ============================================================================
