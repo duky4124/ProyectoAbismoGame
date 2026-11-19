@@ -13,7 +13,10 @@ export interface ChapterRuntime {
 }
 
 const FACE: Record<string, { dx: number; dz: number; yaw: number }> = {
-  n: { dx: 0, dz: -1, yaw: 0 }, s: { dx: 0, dz: 1, yaw: Math.PI }, e: { dx: 1, dz: 0, yaw: -Math.PI / 2 }, w: { dx: -1, dz: 0, yaw: Math.PI / 2 },
+  n: { dx: 0, dz: -1, yaw: 0 },
+  s: { dx: 0, dz: 1, yaw: Math.PI },
+  e: { dx: 1, dz: 0, yaw: -Math.PI / 2 },
+  w: { dx: -1, dz: 0, yaw: Math.PI / 2 },
 };
 
 const bloodTex: THREE.CanvasTexture[] = [];
@@ -106,6 +109,7 @@ export function buildChapter1(g: Game): ChapterRuntime {
     W.prop('fabric').box(x, 0.16, z, 0.5, 0.2, 1.0, ry); W.prop('white').box(x + Math.sin(ry) * -0.62, 0.14, z + Math.cos(ry) * -0.62, 0.22, 0.22, 0.24, ry);
     W.prop('fabric').box(x + Math.cos(ry) * 0.3, 0.1, z - Math.sin(ry) * 0.3 + Math.sin(ry) * 0.5, 0.45, 0.12, 0.2, ry + 0.8); blood(x, z, 2.2);
   };
+
   // luces
   const em = (c: number, i: number, r: number) => ({ c, i, r });
   const tube = (cx: number, cz: number, state: 'dead' | 'flicker' | 'dim' | 'steady', rot = false) => {
@@ -115,9 +119,9 @@ export function buildChapter1(g: Game): ChapterRuntime {
   const redLight = (cx: number, cz: number, y = WALL_H - 0.4) => g.addLight({ x: m(cx), y, z: m(cz), em: em(0xff2415, 14, 13), main: undefined, alarm: true, flicker: 'slow', fixture: 'alarm' });
 
   // ======================= HANGAR =======================
-  // estructura del hangar (metros: x 4..40, z 24..56)
   for (const px of [14, 26, 34]) for (const pz of [32, 50]) pillar(px, pz);
   pillar(8, 32); pillar(8, 50);
+
   // vehículo estrellado
   W.boxProp('yellow', 12, 0.9, 37, 5.6, 1.2, 2.6);
   W.prop('dark').box(10.6, 1.85, 37, 2.2, 1.0, 2.4); W.prop('glass').box(11.75, 1.85, 37, 0.05, 0.8, 2.2);
@@ -128,9 +132,11 @@ export function buildChapter1(g: Game): ChapterRuntime {
   g.addLight({ x: 15.3, y: 1.0, z: 36.3, em: em(0xfff0cc, 22, 14), flicker: 'dying', fixture: 'none' });
   g.addEmitter({ x: 14.5, y: 1.5, z: 37, kind: 'smoke', rate: 5 }); g.addEmitter({ x: 14.9, y: 1.0, z: 37.8, kind: 'spark', rate: 1.2 });
   debris(16.5, 37, 3, 14); blood(18, 41, 1.4);
-  // pared rota por donde entró el vehículo
+
+  // pared rota
   W.prop('dark').box(4.3, 1.8, 36, 0.4, 3.6, 7); debris(6, 37, 2.5, 10);
-  // estanterías, mesas de trabajo y cajas
+
+  // estanterías y cajas
   shelf(10, 24.8, 4.2); shelf(17, 24.8, 3.2); shelf(26, 24.8, 4.4);
   W.boxProp('steel', 22, 0.45, 25.2, 2.2, 0.9, 0.9); W.prop('dark').box(22, 0.92, 25.2, 2.2, 0.06, 0.9);
   crate(32, 26.5, 1.1); crate(33.2, 26.5, 1.0); crate(32.5, 26.5, 0.9, 1.1, 0.3, false);
@@ -138,46 +144,51 @@ export function buildChapter1(g: Game): ChapterRuntime {
   crate(6.5, 28, 1.0); crate(7.6, 28.2, 1.2); crate(6.9, 28.1, 1.0, 1.2, 0.4, false);
   crate(30, 46, 1.1); crate(31.3, 46, 1.0); crate(30.5, 46.1, 1.0, 1.1, 0.2, false);
   W.boxProp('crate', 24, 1.1, 51.4, 1.4, 2.2, 1.4, true, 0.1); W.boxProp('crate', 26.2, 1.1, 51.4, 1.4, 2.2, 1.4, true, -0.1); W.boxProp('crate', 25, 0.55, 53.1, 1.4, 1.1, 1.4, true);
-  // carretilla elevadora
+  
+  // carretilla y generador
   W.boxProp('yellow', 30.5, 0.7, 53, 2.2, 1.0, 1.3); W.prop('dark').box(30, 1.5, 53, 1.1, 0.9, 1.2); W.prop('steel').box(32.1, 1.4, 53, 0.1, 2.4, 1.1);
-  // generador
   W.boxProp('steel', 37.2, 0.8, 51, 1.2, 1.6, 2.6); W.prop('screen').box(36.58, 1.2, 51, 0.02, 0.4, 0.8); W.prop('red').box(37.2, 1.65, 50.4, 0.8, 0.12, 0.3);
   g.addEmitter({ x: 37, y: 1.7, z: 50, kind: 'spark', rate: 0.5 });
-  // tuberías y cables de techo
+
+  // tuberías y cables
   pipeRun(4, 26, 40, 26, 3.2, 0.14); pipeRun(4, 28, 40, 28, 3.3, 0.1, 'pipe_rust'); pipeRun(5, 24.5, 5, 55.5, 3.2, 0.12); pipeRun(39, 24.5, 39, 55.5, 3.2, 0.12, 'pipe_rust');
   for (let i = 0; i < 9; i++) cableHang(8 + i * 3.7 + R(), 28 + R() * 24, 0.8 + R() * 1.4);
   g.addEmitter({ x: 20, y: 3.0, z: 26.2, kind: 'steam', rate: 3 });
-  // cuerpo y señales
+
+  // señales y cuerpo
   body(29, 40, 0.5); body(21, 48, 2.4);
   signAt(['HANGAR 7', 'NEXUS CORP · NIVEL −8000 m'], '#1d2226', '#e5b43a', 22, 2.8, 24.05, 0, 2.6, 0.9);
   signAt(['PELIGRO', 'ZONA DE ALTA PROFUNDIDAD'], '#b9962a', '#111', 4.05, 2.4, 44, Math.PI / 2, 2.2, 0.9);
   signAt(['ATRIO →', 'Acceso Nivel 1'], '#1d3a52', '#e8f4ff', 39.95, 2.6, 33, -Math.PI / 2, 1.8, 0.8);
   signAt(['MANTENIMIENTO', 'CONDUCTO 4B'], '#222', '#9ad', 39.95, 1.2, 55.0, -Math.PI / 2, 1.4, 0.6);
-  W.prop('dark').box(40.1, 2.5, 53, 0.3, 2.2, 2.0); W.prop('dark').box(47.9, 2.5, 67, 0.3, 2.2, 2.0); // dinteles de los conductos
-  // taquillas y escondites
-  locker(5.0, 54, 'e', 'h_lock1');
-  W.boxProp('crate', 18, 1.1, 53.6, 1.5, 2.2, 1.2, true); W.boxProp('crate', 19.6, 1.1, 53.6, 1.5, 2.2, 1.2, true);
-  g.addHide({ id: 'h_crate1', x: 18.8, z: 55.1, yaw: 0, eye: 0.85, type: 'crate', exit: { x: 18.8, z: 51.8 } }, 'Esconderte detrás de las cajas');
-  // terminal de guardado
+  W.prop('dark').box(40.1, 2.5, 53, 0.3, 2.2, 2.0); W.prop('dark').box(47.9, 2.5, 67, 0.3, 2.2, 2.0);
+
+  // Escondites del hangar (ajustados para no chocar con la pared)
+  locker(5.0, 52, 'e', 'h_lock1');
+  W.boxProp('crate', 18, 1.1, 51.6, 1.5, 2.2, 1.2, true); W.boxProp('crate', 19.6, 1.1, 51.6, 1.5, 2.2, 1.2, true);
+  g.addHide({ id: 'h_crate1', x: 18.8, z: 52.8, yaw: 0, eye: 0.85, type: 'crate', exit: { x: 18.8, z: 49.8 } }, 'Esconderte detrás de las cajas');
+
+  // terminal
   terminal(39.2, 34, 'w', 'screen2');
   g.addInteract({ id: 'save_hangar', x: 39.2, y: 1.1, z: 34, reach: 2.5, label: () => 'Terminal — Guardar partida', use: () => saveTerm('Hangar 7') });
-  // luces del hangar
+
+  // luces
   redLight(4, 14); redLight(17, 14); redLight(4, 25); redLight(17, 25); redLight(10, 19.5);
   tube(7, 16, 'flicker'); tube(13, 16, 'dead'); tube(7, 23, 'dim'); tube(14, 23, 'flicker'); tube(11, 19.5, 'dead', true);
 
-  // ---- objetos del hangar ----
-  g.addPickup({ id: 'p_pipe', item: 'pipe', x: 16.8, z: 34.8, y: 0.06 });
-  g.addPickup({ id: 'p_tape', item: 'tape', x: 22.6, z: 25.2, y: 1.0, label: 'Coger cinta americana' });
-  g.addPickup({ id: 'p_can1', item: 'can', x: 35.2, z: 29.4, y: 0.06 });
-  g.addPickup({ id: 'p_wire1', item: 'wire', x: 5.2, z: 45, y: 0.9, label: 'Coger cable pelado' });
-  g.addPickup({ id: 'p_water1', item: 'water', x: 23.2, z: 50, y: 0.1 });
-  g.addPickup({ id: 'p_bat1', item: 'battery', x: 36.4, z: 47.4, y: 0.1 });
+  // ---- OBJETOS DEL HANGAR (Alturas corregidas) ----
+  g.addPickup({ id: 'p_pipe', item: 'pipe', x: 16.8, z: 34.8, y: 0.08 });
+  g.addPickup({ id: 'p_tape', item: 'tape', x: 22.6, z: 25.2, y: 0.95, label: 'Coger cinta americana' });
+  g.addPickup({ id: 'p_can1', item: 'can', x: 35.2, z: 29.4, y: 0.08 });
+  g.addPickup({ id: 'p_wire1', item: 'wire', x: 5.2, z: 45, y: 0.08, label: 'Coger cable pelado' }); // CORREGIDO: estaba flotando a 0.9
+  g.addPickup({ id: 'p_water1', item: 'water', x: 23.2, z: 50, y: 0.08 });
+  g.addPickup({ id: 'p_bat1', item: 'battery', x: 36.4, z: 47.4, y: 0.08 });
   g.addPickup({ id: 'p_band1', item: 'bandage', x: 7.2, z: 26.4, y: 0.08 });
-  g.addPickup({ id: 'p_alc1', item: 'alcohol', x: 10, z: 24.8, y: 1.2 });
-  g.addPickup({ id: 'p_ration1', item: 'ration', x: 19, z: 25, y: 1.8 });
-  g.addDocPickup({ id: 'dp_manifest', doc: 'd_manifest', x: 10.6, z: 38.6, y: 1.36 });
+  g.addPickup({ id: 'p_alc1', item: 'alcohol', x: 10, z: 24.8, y: 0.85 }); // CORREGIDO: apoyado en estante
+  g.addPickup({ id: 'p_ration1', item: 'ration', x: 17, z: 24.8, y: 0.85 }); // CORREGIDO: apoyado en estante
+  g.addDocPickup({ id: 'dp_manifest', doc: 'd_manifest', x: 10.6, z: 38.6, y: 0.95 });
 
-  // cabina del vehículo: linterna
+  // cabina del vehículo
   g.addInteract({
     id: 'cab', x: 10.6, y: 1.5, z: 38.3, reach: 3.0, cone: 0.55,
     label: () => (g.P.hasLight ? null : 'Registrar la guantera'),
@@ -190,6 +201,7 @@ export function buildChapter1(g: Game): ChapterRuntime {
       g.after(16, () => firstEncounter());
     },
   });
+
   // conducto
   g.addTrigger(18, 25, 19, 27, () => { if (!g.flag('ductHint')) { g.setFlag('ductHint'); g.say('DAN', 'Hay un conducto de mantenimiento al fondo. Estrecho, pero quizá evite la puerta del pasillo.'); } });
   g.addTrigger(20, 26, 22, 26, () => { if (!g.flag('vent')) { g.setFlag('vent'); g.addScore(150, 'RUTA ALTERNATIVA'); g.hint('duct', 'En los conductos te mueves agachado. Las criaturas grandes no pueden seguirte aquí.', true); } });
@@ -214,32 +226,32 @@ export function buildChapter1(g: Game): ChapterRuntime {
 
   // ======================= ATRIO =======================
   for (const px of [31, 38]) for (const pz of [15, 23]) pillar(m(px + 0.5), m(pz + 0.5));
-  // mostrador de recepción (zona sur)
   W.boxProp('white', 70, 0.55, 46, 8, 1.1, 1.0); W.prop('dark').box(70, 1.12, 46, 8.2, 0.07, 1.2);
   monitor(67, 1.15, 46.1, Math.PI); monitor(72, 1.15, 46.1, Math.PI, 'screen2');
   g.addHide({ id: 'h_recep', x: 70, z: 47.5, yaw: 0, eye: 0.7, type: 'desk', exit: { x: 70, z: 44.2 } }, 'Esconderte tras el mostrador');
   signAt(['NEXUS', 'Innovación bajo la superficie'], '#0e1216', '#66d0e0', 70, 2.6, 52.0 - 0.05, Math.PI, 3.6, 1.0);
-  // zona de espera
+
   for (let i = 0; i < 4; i++) W.boxProp('fabric', 60 + i * 1.3, 0.28, 31.4, 1.1, 0.55, 0.7); chair(78.5, 30, 2.5); chair(80.2, 31, 4); W.boxProp('dark', 78.5, 0.35, 32.3, 1.6, 0.7, 0.8);
-  // máquina expendedora
   W.boxProp('red', 82, 1.0, 27.2, 1.1, 2.0, 0.9); W.prop('lamp').box(82, 1.3, 26.74, 0.8, 1.1, 0.02);
-  g.addPickup({ id: 'p_water2', item: 'water', x: 81.4, z: 28.6, y: 0.1 }); g.addPickup({ id: 'p_ration2', item: 'ration', x: 82.5, z: 28.7, y: 0.1 });
-  // terminal de guardado y objetos
+
+  g.addPickup({ id: 'p_water2', item: 'water', x: 81.4, z: 28.6, y: 0.08 });
+  g.addPickup({ id: 'p_ration2', item: 'ration', x: 82.5, z: 28.7, y: 0.08 });
   terminal(57.2, 34, 'e', 'screen2');
   g.addInteract({ id: 'save_atrio', x: 57.2, y: 1.1, z: 34, reach: 2.5, label: () => 'Terminal — Guardar partida', use: () => saveTerm('Vestíbulo NEXUS') });
   g.addPickup({ id: 'p_band2', item: 'bandage', x: 58.5, z: 29.3, y: 0.08 });
-  g.addPickup({ id: 'p_bat2', item: 'battery', x: 79.2, z: 32.6, y: 0.74 });
-  g.addPickup({ id: 'p_can2', item: 'can', x: 64.4, z: 31.6, y: 0.06 });
+  g.addPickup({ id: 'p_bat2', item: 'battery', x: 78.5, z: 32.3, y: 0.74 });
+  g.addPickup({ id: 'p_can2', item: 'can', x: 64.4, z: 31.6, y: 0.08 });
   g.addPickup({ id: 'p_glow1', item: 'glowstick', x: 62, z: 50.6, y: 0.08 });
   debris(66, 36, 3, 14); debris(78, 44, 2, 8); blood(68, 40, 2.6); blood(72, 31, 1.6);
   body(62.8, 43, 1.2);
-  W.prop('yellow').box(65.5, 0.5, 38, 0.4, 0.6, 0.4, 0.3); // señal suelo mojado
+  W.prop('yellow').box(65.5, 0.5, 38, 0.4, 0.6, 0.4, 0.3);
   signAt(['OFICINAS', '↑ Seguridad · Dirección'], '#1d3a52', '#e8f4ff', 68.0, 2.3, 26.05, 0, 1.8, 0.8);
   signAt(['ESCLUSA 3', 'ACCESO RESTRINGIDO →'], '#4a1414', '#ffd6d6', 83.95, 2.4, 40, -Math.PI / 2, 2.0, 0.8);
   signAt(['ALMACÉN B', '↓'], '#2a2a2a', '#d4d4d4', 68.0, 2.3, 51.95, Math.PI, 1.6, 0.7);
   pipeRun(56.5, 28, 83.5, 28, 3.3, 0.12); pipeRun(56.5, 50, 83.5, 50, 3.3, 0.1, 'pipe_rust');
   tube(31, 16, 'flicker'); tube(37, 16, 'dead'); tube(31, 22, 'dim'); tube(37, 22, 'flicker'); tube(34.5, 19.5, 'dead'); redLight(28.5, 13.5); redLight(41, 25);
   g.addEmitter({ x: 84, y: 1.0, z: 30, kind: 'steam', rate: 1.5 });
+
   g.addTrigger(28, 17, 29, 21, () => {
     if (g.flag('atrio')) return; g.setFlag('atrio');
     g.say('LENA', 'Dan, te recibo mejor. Eso es el vestíbulo de NEXUS. Más adentro necesitas acceso de Nivel 2.', true);
@@ -259,6 +271,7 @@ export function buildChapter1(g: Game): ChapterRuntime {
       return null;
     },
   });
+
   W.prop('dark').box(73.2, 1.3, 16.1, 0.42, 0.55, 0.12); W.prop('screen2').box(73.2, 1.36, 16.17, 0.3, 0.2, 0.02); W.prop('lamp_red').box(73.2, 1.1, 16.17, 0.2, 0.05, 0.02);
   signAt(['SEGURIDAD', 'Solo personal autorizado'], '#4a1414', '#ffd6d6', 76.2, 2.8, 16.05, 0, 1.6, 0.6);
   signAt(['DIRECCIÓN'], '#1b1b1b', '#e8e0c0', 53.2, 2.7, 16.05, 0, 1.4, 0.5);
@@ -270,72 +283,78 @@ export function buildChapter1(g: Game): ChapterRuntime {
   blood(66, 18, 1.8); blood(86, 17.6, 1.2); debris(70, 18.5, 2, 8);
   g.addEmitter({ x: 90, y: 3.1, z: 17.5, kind: 'spark', rate: 0.6 });
 
-  // --- Oficina de Dirección (x 48..64, z 4..14) ---
+  // --- Oficina de Dirección ---
   desk(53, 7.5, 0); chair(53, 9, 3.14); monitor(53.6, 0.78, 7.4, 0);
   desk(60.5, 6, Math.PI / 2); chair(59, 6, 1.6);
   shelf(49, 12, 3.2, false); shelf(63.4, 11, 3.0, false, true);
-  W.boxProp('dark', 56, 0.3, 5.2, 3.0, 0.6, 0.9); W.boxProp('fabric', 56, 0.28, 11.6, 2.2, 0.55, 0.9); // sofá
+  W.boxProp('dark', 56, 0.3, 5.2, 3.0, 0.6, 0.9); W.boxProp('fabric', 56, 0.28, 11.6, 2.2, 0.55, 0.9);
   locker(62.7, 5.3, 'w', 'h_lock_a');
   signAt(['NEXUS', 'Calidad · Seguridad · Futuro'], '#101418', '#9fd8e8', 56, 2.4, 4.05, 0, 2.2, 0.9);
-  g.addDocPickup({ id: 'dp_memo', doc: 'd_memo', x: 52.5, z: 7.7, y: 0.8 });
-  // cajón con botiquín
+  g.addDocPickup({ id: 'dp_memo', doc: 'd_memo', x: 52.5, z: 7.7, y: 0.82 });
   g.addInteract({ id: 'drawer_a', x: 53, y: 0.6, z: 8, reach: 2.2, cone: 0.6, label: () => (g.collected.has('drawer_a') ? null : 'Abrir cajón'), use: () => { if (!g.canAdd('medkit')) { g.toast('Inventario lleno.', 'warn'); return; } g.collected.add('drawer_a'); g.addItem('medkit'); audio.pickup(); g.toast('🩹 Botiquín en el cajón', 'good'); g.addScore(80, 'ESCONDITE'); } });
-  g.addPickup({ id: 'p_ration3', item: 'canned', x: 60.5, z: 5.4, y: 0.86 });
+  g.addPickup({ id: 'p_ration3', item: 'canned', x: 60.5, z: 5.4, y: 0.82 });
   blood(58, 9, 1.8);
   tube(52, 8, 'flicker'); tube(60, 8, 'dead'); tube(56, 12, 'dim');
 
-  // --- Cubículos B (x 86..98, z 4..14) ---
+  // --- Cubículos B (ROTACIÓN DE ESCONDITE CORREGIDA) ---
   for (let i = 0; i < 3; i++) { desk(89 + i * 3.4, 6, Math.PI / 2); W.boxProp('white', 90.8 + i * 3.4, 0.8, 8, 0.1, 1.6, 3.0); chair(88.3 + i * 3.4, 6, 1.6); monitor(89.3 + i * 3.4, 0.78, 6.4, 0, i === 1 ? 'screen2' : 'screen'); }
-  desk(93, 11.5, 0, 'h_desk_b', 's'); chair(95.4, 11.5, 4);
-  g.addDocPickup({ id: 'dp_calendar', doc: 'd_calendar', x: 92.8, z: 11.4, y: 0.8 });
-  g.addDocPickup({ id: 'dp_audio1', doc: 'd_audio1', x: 92.0, z: 6.4, y: 0.8, label: 'Escuchar grabadora' });
+  // CORREGIDO: face: 'n' para que mire a la habitación y no al muro
+  desk(93, 10.5, 0, 'h_desk_b', 'n'); chair(93, 11.8, 0);
+  g.addDocPickup({ id: 'dp_calendar', doc: 'd_calendar', x: 92.8, z: 10.4, y: 0.82 });
+  g.addDocPickup({ id: 'dp_audio1', doc: 'd_audio1', x: 92.0, z: 6.4, y: 0.82, label: 'Escuchar grabadora' });
   g.addPickup({ id: 'p_bat3', item: 'battery', x: 96.6, z: 12.6, y: 0.08 });
   g.addPickup({ id: 'p_wire2', item: 'wire', x: 87, z: 12.4, y: 0.08 });
-  g.addPickup({ id: 'p_band3', item: 'bandage', x: 95.5, z: 5.5, y: 0.8 });
+  g.addPickup({ id: 'p_band3', item: 'bandage', x: 95.5, z: 5.5, y: 0.82 });
   body(88, 11, 0.4); blood(91, 11, 1.6);
   signAt(['“Nunca mires', 'a los ojos”'], '#2a1010', '#d33', 86.05, 1.8, 11, Math.PI / 2, 1.7, 0.8);
   tube(90, 5, 'flicker'); tube(94.5, 11, 'dead'); tube(88, 11, 'dim');
 
-  // --- Seguridad (x 68..82, z 4..14) ---
+  // --- Seguridad ---
   desk(75, 6.5, 0, 'h_desk_seg', 's'); chair(75, 8.2, 3.14); monitor(75.5, 0.78, 6.4, 0, 'screen2'); monitor(74.4, 0.78, 6.4, 0);
   for (let i = 0; i < 4; i++) { W.boxProp('dark', 69.2, 0.6, 5 + i * 1.7, 0.5, 1.2, 1.4); W.prop('screen').box(69.47, 1.0, 5 + i * 1.7, 0.02, 0.4, 0.9); }
   W.boxProp('steel', 81, 1.0, 6, 0.9, 2.0, 2.4); W.prop('red').box(80.54, 1.0, 6, 0.02, 1.8, 2.2);
-  locker(80.7, 12, 'w', 'h_lock_seg'); locker(80.7, 10.6, 'w');
-  g.addPickup({ id: 'p_keycard', item: 'keycard_blue', x: 76.2, z: 6.6, y: 0.8, score: 400 });
-  g.addDocPickup({ id: 'dp_incident', doc: 'd_incident', x: 73.6, z: 6.6, y: 0.8 });
-  g.addPickup({ id: 'p_medkit_seg', item: 'medkit', x: 72, z: 13, y: 0.08 });
-  g.addPickup({ id: 'p_noise_seg', item: 'wire', x: 82.2, z: 4.5, y: 0.08 });
+  // CORREGIDO: separación del armario de la esquina
+  locker(79.8, 11.2, 'w', 'h_lock_seg'); locker(79.8, 9.8, 'w');
+  g.addPickup({ id: 'p_keycard', item: 'keycard_blue', x: 76.2, z: 6.6, y: 0.82, score: 400 });
+  g.addDocPickup({ id: 'dp_incident', doc: 'd_incident', x: 73.6, z: 6.6, y: 0.82 });
+  g.addPickup({ id: 'p_medkit_seg', item: 'medkit', x: 72, z: 12.5, y: 0.08 });
+  g.addPickup({ id: 'p_noise_seg', item: 'wire', x: 81.2, z: 4.5, y: 0.08 });
   blood(72, 9, 2.0, undefined); blood(80, 7, 1.4);
   tube(72, 7, 'steady'); tube(77, 11, 'flicker'); redLight(36, 5);
 
-  // ======================= ALMACÉN B (x 48..88, z 58..74) =======================
+  // ======================= ALMACÉN B (OBJETOS EN ESTANTES CORREGIDOS) =======================
   g.makeDoor({ id: 'ds', cx: 34, cy: 27, kind: 'office', heavy: false });
   for (const sx of [53, 63, 74, 82]) for (const sz of [62, 68]) if (!(sx === 63 && sz === 68)) shelf(sx, sz, 7, true, true);
   crate(50, 60, 1.2); crate(51.3, 60, 1.0); crate(50.4, 60, 1.0, 1.0, 0.4, false);
   barrel(86.5, 61); barrel(87.3, 61.8, 'red'); barrel(86.6, 62.7);
   barrel(86.6, 68.6, 'red'); barrel(85.8, 69.4); barrel(86.8, 70.2, 'rust');
-  W.boxProp('yellow', 56, 0.35, 72.6, 2.4, 0.7, 1.0); W.boxProp('crate', 58.8, 0.5, 72.4, 1.4, 1.0, 1.0); W.boxProp('crate', 60.4, 0.5, 72.5, 1.1, 1.0, 1.1);
-  g.addHide({ id: 'h_crate_alm', x: 85, z: 72.5, yaw: Math.PI / 2, eye: 0.85, type: 'crate', exit: { x: 82.8, z: 72 } }, 'Esconderte detrás de los barriles');
-  W.boxProp('crate', 83.6, 1.0, 72.8, 1.3, 2.0, 1.3); W.boxProp('crate', 83.6, 1.0, 71.2, 1.3, 2.0, 1.3);
+  W.boxProp('yellow', 56, 0.35, 71.6, 2.4, 0.7, 1.0); W.boxProp('crate', 58.8, 0.5, 71.4, 1.4, 1.0, 1.0); W.boxProp('crate', 60.4, 0.5, 71.5, 1.1, 1.0, 1.1);
+  
+  // CORREGIDO: escondite en cajas de almacén no choca con el muro sur
+  g.addHide({ id: 'h_crate_alm', x: 84.5, z: 70.8, yaw: Math.PI / 2, eye: 0.85, type: 'crate', exit: { x: 82.5, z: 69.5 } }, 'Esconderte detrás de los barriles');
+  W.boxProp('crate', 83.6, 1.0, 71.8, 1.3, 2.0, 1.3); W.boxProp('crate', 83.6, 1.0, 70.2, 1.3, 2.0, 1.3);
   locker(49, 66, 'e', 'h_lock_alm');
+
   pipeRun(48, 60, 88, 60, 3.3, 0.12); pipeRun(48, 72, 88, 72, 3.2, 0.1, 'pipe_rust');
   for (let i = 0; i < 6; i++) cableHang(52 + i * 6 + R(), 61 + R() * 12, 0.7 + R());
   g.addEmitter({ x: 70, y: 3.1, z: 60.4, kind: 'steam', rate: 2.5 }); g.addEmitter({ x: 55, y: 3.1, z: 72, kind: 'spark', rate: 0.7 });
   debris(66, 66, 3, 16); blood(74, 70, 2.2); body(70, 65, 1.9);
   signAt(['ALMACÉN B', 'Suministros · Sector Lab'], '#1d2226', '#e5b43a', 68, 2.8, 58.05, 0, 2.6, 0.9);
-  signAt(['ELLOS ESTÁN', 'DETRÁS DE LA PARED'], '#14110f', '#b22', 65, 1.7, 73.95, Math.PI, 2.2, 1.0);
-  blood(65, 73.93, 1.8, { y: 1.1, ry: Math.PI });
-  // objetos
-  g.addPickup({ id: 'p_fuse', item: 'fuse_burnt', x: 53, z: 62, y: 1.78, label: 'Coger fusible quemado' });
-  g.addPickup({ id: 'p_wire3', item: 'wire', x: 63, z: 61.8, y: 1.18 });
-  g.addPickup({ id: 'p_can3', item: 'can', x: 74, z: 62.2, y: 0.62 });
-  g.addPickup({ id: 'p_bat4', item: 'battery', x: 82, z: 67.8, y: 0.62 });
-  g.addPickup({ id: 'p_water3', item: 'water', x: 51.2, z: 72, y: 0.1 });
-  g.addPickup({ id: 'p_alc2', item: 'alcohol', x: 74, z: 68, y: 1.18 });
-  g.addPickup({ id: 'p_ration4', item: 'ration', x: 53, z: 68, y: 0.62 });
-  g.addPickup({ id: 'p_glow2', item: 'glowstick', x: 49.3, z: 70.5, y: 0.08 });
-  g.addDocPickup({ id: 'dp_supply', doc: 'd_supply', x: 63, z: 67.9, y: 1.2 });
-  // palanca oculta tras los barriles
+  signAt(['ELLOS ESTÁN', 'DETRÁS DE LA PARED'], '#14110f', '#b22', 65, 1.7, 71.95, Math.PI, 2.2, 1.0);
+  blood(65, 71.93, 1.8, { y: 1.1, ry: Math.PI });
+
+  // CORREGIDOS: Todos los items de estanterías nivelados a 0.85m o 0.08m
+  g.addPickup({ id: 'p_fuse', item: 'fuse_burnt', x: 53, z: 62, y: 0.85, label: 'Coger fusible quemado' });
+  g.addPickup({ id: 'p_wire3', item: 'wire', x: 63, z: 61.8, y: 0.85 });
+  g.addPickup({ id: 'p_can3', item: 'can', x: 74, z: 62.2, y: 0.85 });
+  g.addPickup({ id: 'p_bat4', item: 'battery', x: 82, z: 67.8, y: 0.85 });
+  g.addPickup({ id: 'p_water3', item: 'water', x: 51.2, z: 71, y: 0.08 });
+  g.addPickup({ id: 'p_alc2', item: 'alcohol', x: 74, z: 68, y: 0.85 });
+  g.addPickup({ id: 'p_ration4', item: 'ration', x: 53, z: 68, y: 0.85 });
+  g.addPickup({ id: 'p_glow2', item: 'glowstick', x: 49.3, z: 70.0, y: 0.08 });
+  g.addDocPickup({ id: 'dp_supply', doc: 'd_supply', x: 63, z: 67.9, y: 0.85 });
+
+  // palanca oculta
   W.prop('dark').box(87.9, 1.2, 70, 0.18, 0.5, 0.3); W.prop('red').box(87.7, 1.35, 70, 0.1, 0.34, 0.06, 0, 0, 0.5);
   g.addInteract({
     id: 'lever', x: 87.7, y: 1.2, z: 70, reach: 2.6, cone: 0.6, label: () => (g.flag('secret_open') ? null : 'Tirar de la palanca oculta'),
@@ -347,7 +366,7 @@ export function buildChapter1(g: Game): ChapterRuntime {
   g.makeDoor({ id: 'secret', cx: 32, cy: 37, kind: 'secret', locked: true });
   tube(52, 31, 'dim'); tube(60, 34, 'dead'); tube(68, 31, 'flicker'); tube(76, 34, 'dim'); tube(83, 31, 'flicker'); tube(60, 31, 'dead'); redLight(24.5, 29.5);
 
-  // sala secreta (x 56..74, z 76..86)
+  // sala secreta
   W.boxProp('white', 65, 0.45, 80, 1.2, 0.9, 2.4); W.prop('steel').box(65, 0.95, 80, 1.3, 0.05, 2.5); for (const dz of [-0.6, 0.6]) W.prop('black').box(65, 1.0, 80 + dz, 1.3, 0.04, 0.12);
   W.boxProp('dark', 70, 0.6, 77, 1.0, 1.2, 0.6); W.prop('screen2').box(70, 1.45, 76.8, 1.4, 0.7, 0.04);
   W.boxProp('steel', 58.6, 0.5, 84.4, 1.6, 1.0, 0.8); monitor(58.4, 1.0, 84.4, 0, 'screen'); monitor(59, 1.0, 84.4, 0, 'screen2');
@@ -355,7 +374,7 @@ export function buildChapter1(g: Game): ChapterRuntime {
   blood(66, 83, 2.8); blood(60, 78, 1.6); blood(71, 85.9, 1.6, { y: 1.3, ry: Math.PI });
   signAt(['0-ECO', 'PROTOCOLO · REINTEGRACIÓN'], '#10161a', '#79e0c0', 65, 2.6, 85.9, Math.PI, 2.4, 0.9);
   signAt(['¿DÓNDE ESTÁ', 'DANIEL?'], '#12100f', '#c33', 56.1, 1.8, 83, Math.PI / 2, 1.8, 0.9);
-  g.addDocPickup({ id: 'dp_secret', doc: 'd_secret', x: 70, z: 77.5, y: 1.2 });
+  g.addDocPickup({ id: 'dp_secret', doc: 'd_secret', x: 70, z: 77.5, y: 1.05 });
   g.addDocPickup({ id: 'dp_secret_audio', doc: 'd_secret_audio', x: 58.8, z: 84.4, y: 1.02, label: 'Escuchar grabación oculta' });
   g.addPickup({ id: 'p_medkit_sec', item: 'medkit', x: 62.5, z: 84.6, y: 0.08, secret: true, score: 200 });
   g.addPickup({ id: 'p_bat_sec', item: 'battery', x: 72.4, z: 79, y: 0.08, secret: true, score: 200 });
@@ -367,8 +386,8 @@ export function buildChapter1(g: Game): ChapterRuntime {
   // ======================= CONDUCTO DE MANTENIMIENTO =======================
   g.addLight({ x: m(21), y: 1.2, z: m(26.5), em: em(0xffb060, 5, 5), flicker: 'slow', fixture: 'bulb' });
   g.addLight({ x: m(22.5), y: 1.2, z: m(30), em: em(0xffb060, 5, 5), fixture: 'bulb' });
-  g.addPickup({ id: 'p_duct_item', item: 'glowstick', x: m(22.5), z: m(31), y: 0.06, secret: true, score: 100 });
-  g.addPickup({ id: 'p_duct_item2', item: 'wire', x: m(21.5), z: m(26.5), y: 0.06 });
+  g.addPickup({ id: 'p_duct_item', item: 'glowstick', x: m(22.5), z: m(31), y: 0.08, secret: true, score: 100 });
+  g.addPickup({ id: 'p_duct_item2', item: 'wire', x: m(21.5), z: m(26.5), y: 0.08 });
 
   // ======================= PASILLO ESCLUSA / ESCLUSA =======================
   const d5 = g.makeDoor({
@@ -380,7 +399,7 @@ export function buildChapter1(g: Game): ChapterRuntime {
       return null;
     },
   });
-  signAt(['NIVEL 2', 'Tarjeta requerida'], '#14243a', '#7cc0ff', 88, 2.5, 38 - 0.0 + 0.0 - 0.9, 0, 1.6, 0.7);
+  signAt(['NIVEL 2', 'Tarjeta requerida'], '#14243a', '#7cc0ff', 88, 2.5, 38 - 0.9, 0, 1.6, 0.7);
   tube(43.5, 19.5, 'flicker', true); tube(46.5, 19.5, 'dead', true); redLight(45, 19.5);
   pipeRun(84, 38.3, 96, 38.3, 3.0, 0.09); cableHang(92, 39, 1);
   g.addEmitter({ x: 93, y: 2.9, z: 39.4, kind: 'steam', rate: 2 });
@@ -390,24 +409,29 @@ export function buildChapter1(g: Game): ChapterRuntime {
   for (const px of [102, 108]) pillar(px, 32);
   for (const px of [102, 108]) pillar(px, 46);
   W.boxProp('steel', 105, 0.7, 28.9, 2.4, 1.4, 0.7); W.prop('dark').box(105, 1.5, 28.55, 1.0, 1.0, 0.1); W.prop('lamp_red').box(105, 1.5, 28.49, 0.8, 0.8, 0.02);
-  // consola del ascensor
+
   terminal(112.4, 36.2, 'w', 'screen2'); W.prop('yellow').box(112.4, 0.1, 36.2, 1.0, 0.1, 1.0);
   locker(96.6, 31, 'e', 'h_lock_ex'); locker(96.6, 32.4, 'e');
-  W.boxProp('crate', 109, 1.0, 47.2, 1.4, 2.0, 1.3, true); W.boxProp('crate', 110.6, 0.55, 47.2, 1.4, 1.1, 1.3, true); W.boxProp('crate', 99.5, 0.5, 47.3, 1.0, 1.0, 1.0);
-  g.addHide({ id: 'h_crate_ex', x: 110, z: 48.7, yaw: 0, eye: 0.85, type: 'crate', exit: { x: 110, z: 45.2 } }, 'Esconderte detrás de las cajas');
+  W.boxProp('crate', 109, 1.0, 46.2, 1.4, 2.0, 1.3, true); W.boxProp('crate', 110.6, 0.55, 46.2, 1.4, 1.1, 1.3, true); W.boxProp('crate', 99.5, 0.5, 46.3, 1.0, 1.0, 1.0);
+  
+  // CORREGIDO: escondite en cajas de esclusa
+  g.addHide({ id: 'h_crate_ex', x: 110, z: 46.2, yaw: 0, eye: 0.85, type: 'crate', exit: { x: 110, z: 43.8 } }, 'Esconderte detrás de las cajas');
   terminal(97.4, 44, 'e', 'screen2');
   g.addInteract({ id: 'save_ex', x: 97.4, y: 1.1, z: 44, reach: 2.5, label: () => 'Terminal — Guardar partida', use: () => saveTerm('Esclusa 3') });
+
   g.addPickup({ id: 'p_bat5', item: 'battery', x: 99.5, z: 31, y: 0.08 });
   g.addPickup({ id: 'p_medkit_ex', item: 'medkit', x: 108.5, z: 30, y: 0.08 });
-  g.addPickup({ id: 'p_water4', item: 'water', x: 100.5, z: 46.4, y: 0.08 });
-  g.addPickup({ id: 'p_noise_ex', item: 'can', x: 104, z: 40, y: 0.06 });
-  g.addPickup({ id: 'p_wire_ex', item: 'wire', x: 99, z: 40, y: 0.06 });
+  g.addPickup({ id: 'p_water4', item: 'water', x: 100.5, z: 45.4, y: 0.08 });
+  g.addPickup({ id: 'p_noise_ex', item: 'can', x: 104, z: 40, y: 0.08 });
+  g.addPickup({ id: 'p_wire_ex', item: 'wire', x: 99, z: 40, y: 0.08 });
+
   pipeRun(96.5, 30, 113.5, 30, 3.2, 0.14); pipeRun(96.5, 48, 113.5, 48, 3.3, 0.11, 'pipe_rust'); pipeRun(113.4, 29, 113.4, 49, 3.1, 0.12);
   signAt(['ESCLUSA 3', 'ASCENSOR DE SERVICIO'], '#4a1414', '#ffd6d6', 113.95, 2.8, 41.3, -Math.PI / 2, 2.4, 0.9);
   signAt(['FUSIBLE', 'PRINCIPAL'], '#222', '#ffcc33', 105, 2.4, 28.05, 0, 1.4, 0.6);
   g.addEmitter({ x: 100, y: 3.1, z: 30.5, kind: 'steam', rate: 2 }); g.addEmitter({ x: 105, y: 1.5, z: 28.9, kind: 'spark', rate: 0.5 });
   blood(104, 38, 3); body(100, 36, 0.8);
   tube(101, 15.5, 'flicker'); tube(105, 19.5, 'dead'); tube(109, 22.5, 'flicker'); tube(101, 22.5, 'dim'); tube(109, 15.5, 'dead'); redLight(48.5, 14.5); redLight(56, 24);
+
   // caja de fusibles
   g.addInteract({
     id: 'fusebox', x: 105, y: 1.4, z: 28.9, reach: 2.8, cone: 0.65,
@@ -421,6 +445,7 @@ export function buildChapter1(g: Game): ChapterRuntime {
       else { audio.deny(); g.say('DAN', 'Falta el fusible principal. Según el albarán, hay uno en el Almacén B.'); }
     },
   });
+
   // consola del ascensor
   let liftT = 0;
   g.addInteract({
@@ -438,9 +463,11 @@ export function buildChapter1(g: Game): ChapterRuntime {
       });
     },
   });
+
   const lift = g.makeDoor({ id: 'lift', cx: 57, cy: 19, kind: 'steel', locked: true, name: 'Ascensor' });
   g.addLight({ x: m(59.5), y: 3.2, z: m(19.5), em: em(0xbfffd0, 18, 10), fixture: 'tube', rot: true });
   W.prop('steel').box(121.6, 1.0, 39, 0.12, 0.08, 4.0); W.prop('yellow').box(116.3, 0.06, 39, 0.5, 0.03, 4.0);
+
   g.addTrigger(58, 18, 60, 20, () => {
     if (!g.flag('lift_open') || g.state !== 'playing') return;
     g.say('LENA', 'Dan, escúchame. Central pregunta qué has visto ahí abajo. ¿Les cuento todo?', true);
@@ -449,6 +476,7 @@ export function buildChapter1(g: Game): ChapterRuntime {
       { label: 'Ocultar lo que sabes y responder a la señal desconocida.', flag: 'choice_signal' },
     ], () => finish()));
   });
+
   const finish = () => {
     const trust = g.flag('choice_trust'); const secret = g.flag('doc:d_secret');
     if (!trust) g.say('???', 'Bien hecho, Dan. Sigue descendiendo. Hay cosas sobre ti que necesitas recordar.', true);
@@ -485,6 +513,7 @@ export function buildChapter1(g: Game): ChapterRuntime {
     if (!g.canSave()) { audio.deny(); g.toast('No puedes guardar mientras algo te persigue.', 'bad'); return; }
     g.checkpoint('Terminal — ' + name);
   };
+
   const firstEncounter = () => {
     if (g.flag('enc1')) return; g.setFlag('enc1');
     audio.distant(3);
@@ -498,53 +527,8 @@ export function buildChapter1(g: Game): ChapterRuntime {
       }
     });
   };
+
   const onPickup = (item: string) => {
     if (item === 'keycard_blue' && !g.flag('keycard_event')) {
       g.setFlag('keycard_event');
-      g.shake(0.7, 1.2); audio.powerOff(); g.alarm(true); audio.rumble();
-      g.say('LENA', '¡Dan! ¡Ha saltado la alarma de contención! ¡Algo se ha liberado, sal de ahí ya!', true);
-      g.say('DAN', 'Genial… Tengo que esconderme o salir sin que me vea.');
-      g.hint('hideflee', 'Escóndete (E) en armarios o bajo mesas ANTES de que te vea entrar. Si ves que patrulla, no hagas ruido.', true);
-      g.after(7, () => { if (!g.enemy.active) { const sp = g.pickSpawn(24, 70, false); g.spawnEnemy('chase', sp ? { at: sp } : { minD: 16, maxD: 120, los: null }); } });
-      g.directorGap = [30, 55];
-    }
-    if (item === 'pipe' || item === 'tape') { if (g.has('pipe') && g.has('tape')) g.hint('craftA', 'Tienes tubo y cinta. Abre la mochila (Tab) y fabrica una palanca.', true); }
-    if (item === 'fuse_burnt') g.say('DAN', 'Un fusible quemado. Si lo puenteo con cable de cobre…');
-    if (item === 'can' || item === 'wire') { if (g.has('can') && g.has('wire')) g.hint('craftB', 'Lata + cable = distractor sonoro (G para lanzar). Atrae a las criaturas.'); }
-  };
-  const onCraft = (item: string) => { if (item === 'fuse') g.say('DAN', 'Listo. Ahora hay que llevárselo a la caja de la esclusa.'); };
-  const onDoc = (id: string) => {
-    if (id === 'd_secret') g.say('DAN', '…Daniel Ortega. Ese soy yo. No… no puede ser.');
-    if (id === 'd_manifest') g.hint('doc', 'Todos los documentos quedan guardados en la mochila → pestaña Archivo.');
-  };
-
-  const tickEnding = (dt: number) => {
-    if (g.flag('lift_called') && !g.flag('lift_open')) {
-      liftT -= dt;
-      if (liftT <= 0) {
-        g.setFlag('lift_open'); g.unlockDoor(lift, true); audio.ding(); g.alarm(false);
-        g.toast('El ascensor ha llegado. ¡Corre!', 'good'); g.say('LENA', '¡Ya está abierto! ¡Entra, Dan, entra!', true);
-      }
-    }
-  };
-
-  return {
-    start: {
-      x: 11, z: 41, yaw: 0,
-      run: (fromSave) => {
-        if (g.flag('power')) { g.powerOn = true; }
-        if (g.flag('atrio')) { g.directorOn = true; g.directorGap = g.flag('keycard_event') ? [30, 55] : [40, 80]; }
-        if (fromSave) { g.toast('Partida cargada', 'info'); return; }
-        g.fadeSpeed = 0.5; g.alarm(true); audio.crash(); g.shake(1, 1.2);
-        g.after(24, () => { if (!g.flag('keycard_event')) g.alarm(false); });
-        g.after(1.2, () => { g.say('LENA', 'Dan… ¿me recibes? Perdimos tu telemetría. Dan, contesta.', true); });
-        g.after(5.5, () => g.say('DAN', 'Ugh… la cabeza… El vehículo… ¿dónde estoy?'));
-        g.after(9, () => { g.say('LENA', 'Tu transpondedor te sitúa en el hangar siete, a ocho mil metros. Busca luz y sal de ahí.', true); });
-        g.after(3, () => g.hint('wasd', 'WASD para moverte · ratón para mirar · busca algo de luz', true));
-        g.after(12, () => { g.shake(0.8, 1.0); audio.rumble(); g.dustBurst(40);});
-      },
-    },
-    update: tickEnding,
-    onPickup, onDoc, onCraft,
-  };
-}
+      g.shake(0.7, 
