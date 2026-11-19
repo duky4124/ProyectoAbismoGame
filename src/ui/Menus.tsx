@@ -15,19 +15,20 @@ export function MainMenu({ onNew, onContinue, onChapters, onSettings, hasSave, s
       position: 'fixed',
       inset: 0,
       zIndex: 50,
-      background: 'radial-gradient(circle at center, rgba(3, 8, 16, 0.6) 0%, rgba(1, 3, 6, 0.95) 100%)',
+      background: 'radial-gradient(circle at center, rgba(5, 12, 22, 0.55) 0%, rgba(2, 4, 8, 0.95) 100%)',
       display: 'flex',
       flexDirection: 'column',
       justifyContent: 'center',
       alignItems: 'center',
       fontFamily: "'Courier New', Courier, monospace",
       color: '#fff',
-      padding: '20px'
+      padding: '20px',
+      userSelect: 'none'
     }}>
       {/* Título */}
       <div style={{ textAlign: 'center', marginBottom: '40px' }}>
         <h1 style={{
-          fontSize: '2.8rem',
+          fontSize: '3rem',
           letterSpacing: '8px',
           margin: 0,
           color: '#e2f1ff',
@@ -45,8 +46,8 @@ export function MainMenu({ onNew, onContinue, onChapters, onSettings, hasSave, s
         </div>
       </div>
 
-      {/* Lista de Botones */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', width: '320px' }}>
+      {/* Contenedor de Botones */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '320px' }}>
         
         {/* Nueva Partida */}
         <button
@@ -65,40 +66,37 @@ export function MainMenu({ onNew, onContinue, onChapters, onSettings, hasSave, s
           title={hasSave ? saveInfo : 'No hay partida guardada'}
           style={btnStyle(!hasSave)}
           onMouseEnter={(e) => hasSave && Object.assign(e.currentTarget.style, btnHover)}
-          onMouseLeave={(e) => hasSave && Object.assign(e.currentTarget.style, btnStyle(false))}
+          onMouseLeave={(e) => hasSave && Object.assign(e.currentTarget.style, btnStyle(!hasSave))}
         >
           CONTINUAR
           {hasSave && (
-            <span style={{ display: 'block', fontSize: '10px', color: '#00ffcc', marginTop: '2px' }}>
+            <span style={{ display: 'block', fontSize: '10px', color: '#00ffcc', marginTop: '3px' }}>
               {saveInfo || 'Punto de control'}
             </span>
           )}
         </button>
 
-        {/* Multijugador (Bloqueado) */}
-        <div style={{ position: 'relative' }}>
-          <button
-            disabled
-            style={{
-              ...btnStyle(true),
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '10px 16px',
-              cursor: 'not-allowed',
-              opacity: 0.55
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span>MULTIJUGADOR</span>
-              <span style={{ fontSize: '11px' }}>🔒</span>
-            </div>
-            <span style={{ fontSize: '9px', color: '#ff6666', marginTop: '3px', letterSpacing: '0.5px' }}>
-              Servidores NEXUS fuera de línea
-            </span>
-          </button>
-        </div>
+        {/* Multijugador (Bloqueado justo debajo de Continuar) */}
+        <button
+          disabled
+          style={{
+            ...btnStyle(true),
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '10px 16px',
+            opacity: 0.55
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span>MULTIJUGADOR</span>
+            <span style={{ fontSize: '11px' }}>🔒</span>
+          </div>
+          <span style={{ fontSize: '9px', color: '#ff6666', marginTop: '3px', letterSpacing: '0.5px' }}>
+            Servidores NEXUS fuera de línea
+          </span>
+        </button>
 
         {/* Seleccionar Capítulo */}
         {onChapters && (
@@ -134,10 +132,10 @@ export function MainMenu({ onNew, onContinue, onChapters, onSettings, hasSave, s
 }
 
 const btnStyle = (disabled: boolean): React.CSSProperties => ({
-  background: disabled ? 'rgba(10, 16, 24, 0.4)' : 'rgba(14, 24, 38, 0.8)',
+  background: disabled ? 'rgba(10, 16, 24, 0.4)' : 'rgba(14, 24, 38, 0.85)',
   border: disabled ? '1px solid #1c2838' : '1px solid #2d425c',
   color: disabled ? '#45566a' : '#cce0f5',
-  padding: '12px 20px',
+  padding: '13px 20px',
   fontFamily: "'Courier New', Courier, monospace",
   fontSize: '13px',
   letterSpacing: '2px',
