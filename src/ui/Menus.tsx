@@ -9,7 +9,7 @@ export function fmtTime(s: number) {
 }
 
 // ============================================================================
-// COMPONENTE 3D: RENDERIZA TU CRIATURA "OBSERVER" EN EL MENÚ
+// COMPONENTE 3D: OBSERVER MIRANDO AL FRENTE CON CARA Y OJOS ILUMINADOS
 // ============================================================================
 function ObserverMenu3D() {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -20,30 +20,31 @@ function ObserverMenu3D() {
 
     // 1. Escena y Cámara
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(42, container.clientWidth / container.clientHeight, 0.1, 50);
-    camera.position.set(0, 1.8, 3.8);
+    const camera = new THREE.PerspectiveCamera(40, container.clientWidth / container.clientHeight, 0.1, 50);
+    camera.position.set(0, 1.7, 4.2);
 
-    // 2. Renderer con transparencia
+    // 2. Renderer transparente
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
     container.appendChild(renderer.domElement);
 
-    // 3. Luces atmosféricas para resaltar la piel cadavérica y los huesos
-    const ambientLight = new THREE.AmbientLight(0x0c131a, 1.2);
+    // 3. Iluminación frontal enfocada en el rostro y tórax
+    const ambientLight = new THREE.AmbientLight(0x0e1317, 1.5);
     scene.add(ambientLight);
 
-    const redRimLight = new THREE.PointLight(0xff1a1a, 4, 10);
-    redRimLight.position.set(1.5, 2.5, -1.0);
-    scene.add(redRimLight);
+    // Luz fría frontal para resaltar los rasgos faciales cadavéricos y dientes
+    const faceLight = new THREE.DirectionalLight(0xd8e6ec, 2.2);
+    faceLight.position.set(0.5, 3.5, 4.0);
+    scene.add(faceLight);
 
-    const coldKeyLight = new THREE.DirectionalLight(0x407080, 1.5);
-    coldKeyLight.position.set(-2, 3, 3);
-    scene.add(coldKeyLight);
+    // Luz roja siniestra lateral/inferior
+    const redGlow = new THREE.PointLight(0xff1800, 3.5, 7);
+    redGlow.position.set(1.6, 2.2, 1.5);
+    scene.add(redGlow);
 
     // ========================================================================
-    // CONSTRUCCIÓN DEL BICHO (TU MODELO EXACTO)
+    // CONSTRUCCIÓN DEL BICHO
     // ========================================================================
     const group = new THREE.Group();
     const body = new THREE.Group();
@@ -56,17 +57,17 @@ function ObserverMenu3D() {
       color: 0xedeae2,
       roughness: 0.38,
       metalness: 0.05,
-      emissive: 0x181512,
+      emissive: 0x1f1d1a,
     });
     const boneMat = new THREE.MeshStandardMaterial({
       color: 0xf5f3ee,
       roughness: 0.25,
       metalness: 0.1,
     });
-    const voidDark = new THREE.MeshBasicMaterial({ color: 0x020202 });
+    const voidDark = new THREE.MeshBasicMaterial({ color: 0x010101 });
     const fleshMat = new THREE.MeshStandardMaterial({ color: 0x3d1a24, roughness: 0.45, emissive: 0x140408 });
     const clawMat = new THREE.MeshStandardMaterial({ color: 0x111113, roughness: 0.15, metalness: 0.4 });
-    const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff1100 });
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
 
     const createAnatomicalBone = (len: number, rTop: number, rBot: number) => {
       const grp = new THREE.Group();
@@ -113,7 +114,7 @@ function ObserverMenu3D() {
       body.add(rib);
     }
 
-    // Vértebras
+    // Vértebras traseras
     for (let i = 0; i < 9; i++) {
       const vert = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.16, 4), boneMat);
       vert.rotation.x = Math.PI / 2 + 0.25;
@@ -143,49 +144,61 @@ function ObserverMenu3D() {
       body.add(tendon);
     }
 
-    // Cabeza
+    // ========================================================================
+    // CABEZA Y ROSTRO FRONTAL
+    // ========================================================================
     head.position.set(0, 2.85, -0.06);
     body.add(head);
 
-    const cranium = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), skinMat);
+    const cranium = new THREE.Mesh(new THREE.SphereGeometry(0.18, 14, 12), skinMat);
     cranium.scale.set(0.72, 1.25, 1.2);
     cranium.rotation.x = -0.22;
     head.add(cranium);
 
+    // Pómulos y cuencas oculares
     for (const sx of [-1, 1]) {
       const cheek = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.12, 4), boneMat);
       cheek.position.set(sx * 0.10, 0.02, -0.14);
       cheek.rotation.set(-0.4, 0, sx * 0.4);
       head.add(cheek);
 
-      const socket = new THREE.Mesh(new THREE.SphereGeometry(0.048, 8, 6), voidDark);
+      const socket = new THREE.Mesh(new THREE.SphereGeometry(0.052, 8, 6), voidDark);
       socket.position.set(sx * 0.065, 0.06, -0.17);
       socket.scale.set(1.0, 1.4, 0.8);
       head.add(socket);
 
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 5), eyeMat);
-      eye.position.set(sx * 0.065, 0.055, -0.19);
+      // Ojos brillantes rojos con núcleo incandescente
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.016, 8, 8), eyeMat);
+      eye.position.set(sx * 0.065, 0.055, -0.195);
       head.add(eye);
       eyes.push(eye);
     }
 
-    // Mandíbula y dientes
-    const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.22, 0.16), skinMat);
+    // Luz propia en los ojos para iluminar la cara
+    const eyeLight = new THREE.PointLight(0xff0000, 2.0, 1.8);
+    eyeLight.position.set(0, 0.05, -0.3);
+    head.add(eyeLight);
+
+    // Mandíbula desencajada alargada
+    const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.24, 0.16), skinMat);
     jaw.position.set(0, -0.16, -0.12);
-    jaw.rotation.x = 0.25;
+    jaw.rotation.x = 0.28;
     head.add(jaw);
 
-    const mouthVoid = new THREE.Mesh(new THREE.BoxGeometry(0.065, 0.18, 0.12), voidDark);
-    mouthVoid.position.set(0, -0.14, -0.16);
+    // Garganta oscura
+    const mouthVoid = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.19, 0.13), voidDark);
+    mouthVoid.position.set(0, -0.14, -0.165);
     head.add(mouthVoid);
 
+    // Dientes de aguja visibles
     for (let t = 0; t < 6; t++) {
-      const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.006, 0.03, 3), boneMat);
-      tooth.position.set((t - 2.5) * 0.012, -0.06, -0.21);
+      const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.007, 0.038, 4), boneMat);
+      tooth.position.set((t - 2.5) * 0.013, -0.055, -0.215);
       tooth.rotation.x = Math.PI;
       head.add(tooth);
+
       const bTooth = tooth.clone();
-      bTooth.position.set((t - 2.5) * 0.011, -0.21, -0.19);
+      bTooth.position.set((t - 2.5) * 0.012, -0.22, -0.195);
       bTooth.rotation.x = 0;
       head.add(bTooth);
     }
@@ -220,7 +233,7 @@ function ObserverMenu3D() {
       legs.push({ hip, knee });
     }
 
-    // Brazos
+    // Brazos con garras
     for (const sx of [-1, 1]) {
       const sh = new THREE.Group();
       sh.position.set(sx * 0.26, 2.45, -0.02);
@@ -259,13 +272,12 @@ function ObserverMenu3D() {
     }
 
     // ========================================================================
-    // POSICIÓN EN PANTALLA (A la derecha, acechando)
+    // GIRO DE 180° (Math.PI) PARA QUE QUEDE DE FRENTE MIRANDO A LA PANTALLA
     // ========================================================================
-    group.position.set(1.2, -0.2, -0.3); // Posicionado a la derecha
-    group.rotation.y = -0.35; // Mirando ligeramente hacia el centro del menú
+    group.position.set(1.25, -0.2, 0); 
+    group.rotation.y = Math.PI - 0.35; // De frente al jugador, levemente girado hacia el centro
     scene.add(group);
 
-    // Animación en bucle
     let animId: number;
     let clock = new THREE.Clock();
 
@@ -273,30 +285,30 @@ function ObserverMenu3D() {
       animId = requestAnimationFrame(animate);
       const time = clock.getElapsedTime();
 
-      // Respiración del torso
+      // Respiración del tórax
       chest.scale.x = 1.1 + Math.sin(time * 1.5) * 0.04;
-      body.position.y = Math.sin(time * 1.2) * 0.025;
+      body.position.y = Math.sin(time * 1.2) * 0.02;
 
-      // Movimiento tétrico de la cabeza acechando
-      head.rotation.y = Math.sin(time * 0.6) * 0.18 - 0.2;
-      head.rotation.z = 0.18 + Math.sin(time * 0.9) * 0.06;
+      // Inclinación acechante de cabeza
+      head.rotation.y = Math.sin(time * 0.5) * 0.2;
+      head.rotation.z = 0.14 + Math.sin(time * 0.8) * 0.06;
 
-      // Movimiento sutil de brazos
+      // Movimiento de brazos con garras
       arms.forEach((a, i) => {
         a.sh.rotation.z = (i ? -1 : 1) * (0.08 + Math.sin(time * 1.3 + i * 2) * 0.03);
-        a.el.rotation.x = -0.2 + Math.sin(time * 1.1 + i) * 0.05;
+        a.el.rotation.x = -0.18 + Math.sin(time * 1.1 + i) * 0.04;
       });
 
-      // Pulso brillante en los ojos
-      const em = 0.7 + Math.sin(time * 4) * 0.3;
-      eyes.forEach((e) => e.scale.setScalar(em * 1.3 + 0.2));
+      // Pulso brillante de los ojos rojos
+      const pulse = 0.8 + Math.sin(time * 4.5) * 0.35;
+      eyes.forEach((e) => e.scale.setScalar(pulse * 1.3 + 0.2));
+      eyeLight.intensity = 1.5 + Math.sin(time * 4.5) * 0.8;
 
       renderer.render(scene, camera);
     };
 
     animate();
 
-    // Redimensión de ventana
     const handleResize = () => {
       if (!container) return;
       camera.aspect = container.clientWidth / container.clientHeight;
@@ -319,22 +331,22 @@ function ObserverMenu3D() {
 }
 
 // ============================================================================
-// MENUBACKDROP: FONDO + TU BICHO 3D + ATMÓSFERA
+// MENUBACKDROP
 // ============================================================================
 export function MenuBackdrop() {
   return (
     <div className="fixed inset-0 overflow-hidden bg-[#030507]" style={{ zIndex: 0 }}>
-      {/* 1. IMAGEN DE FONDO (public/fondo.jpg) */}
+      {/* 1. Fondo personalizado (public/fondo.jpg) */}
       <img
         src="/fondo.jpg"
-        alt="Fondo Abismo"
+        alt="Fondo"
         className="absolute inset-0 w-full h-full object-cover object-center opacity-30 select-none"
       />
 
-      {/* 2. TU VERDADERO BICHO 3D (Renderizado en vivo) */}
+      {/* 2. Tu monstruo 3D renderizado mirando al frente */}
       <ObserverMenu3D />
 
-      {/* 3. GRADIENTES Y ATMÓSFERA TÉTRICA */}
+      {/* 3. Iluminación ambiental y atmósfera */}
       <div 
         className="absolute inset-0" 
         style={{ 
@@ -362,7 +374,7 @@ export function MenuBackdrop() {
         />
       ))}
 
-      {/* Sombra inferior para garantizar lectura de controles */}
+      {/* Sombra inferior */}
       <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black via-black/70 to-transparent pointer-events-none" />
     </div>
   );
