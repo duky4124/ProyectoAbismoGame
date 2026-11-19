@@ -11,91 +11,54 @@ type Screen = 'menu' | 'chapters' | 'settings' | 'credits' | 'scores' | 'farewel
 type Modal = 'none' | 'pause' | 'inventory' | 'doc' | 'keypad' | 'choice';
 
 // ============================================================================
-// COMPONENTE: CINEMÁTICA DEL CHOQUE (INTRODUCCIÓN)
+// CINEMÁTICA DEL CHOQUE
 // ============================================================================
 function IntroCutscene({ onComplete }: { onComplete: () => void }) {
   const [time, setTime] = useState(0);
   const [speed, setSpeed] = useState(130);
   const [depth, setDepth] = useState(7240);
   const audioCtxRef = useRef<AudioContext | null>(null);
-  const finishedRef = useRef(false);
+  const doneRef = useRef(false);
 
-  const handleFinish = useCallback(() => {
-    if (finishedRef.current) return;
-    finishedRef.current = true;
+  const finish = useCallback(() => {
+    if (doneRef.current) return;
+    doneRef.current = true;
     onComplete();
   }, [onComplete]);
 
-  // Sintetizador de audio para la cinemática
   useEffect(() => {
     try {
       const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       const ctx = new AC();
       audioCtxRef.current = ctx;
 
-      // 1. Zumbido del motor acelerando
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(60, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(220, ctx.currentTime + 5.2);
+      osc.frequency.exponentialRampToValueAtTime(220, ctx.currentTime + 4.5);
       gain.gain.setValueAtTime(0.12, ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.25, ctx.currentTime + 5.0);
-      gain.gain.setValueAtTime(0, ctx.currentTime + 5.5);
+      gain.gain.linearRampToValueAtTime(0.25, ctx.currentTime + 4.2);
+      gain.gain.setValueAtTime(0, ctx.currentTime + 4.8);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start();
 
-      // 2. Alarma de colisión (empieza a los 2.8 segundos)
-      for (let i = 0; i < 5; i++) {
-        const tStart = ctx.currentTime + 2.8 + i * 0.5;
-        const alarmOsc = ctx.createOscillator();
-        const alarmGain = ctx.createGain();
-        alarmOsc.type = 'square';
-        alarmOsc.frequency.setValueAtTime(880, tStart);
-        alarmOsc.frequency.setValueAtTime(740, tStart + 0.15);
-        alarmGain.gain.setValueAtTime(0.18, tStart);
-        alarmGain.gain.exponentialRampToValueAtTime(0.01, tStart + 0.35);
-        alarmOsc.connect(alarmGain);
-        alarmGain.connect(ctx.destination);
-        alarmOsc.start(tStart);
-        alarmOsc.stop(tStart + 0.4);
+      for (let i = 0; i < 4; i++) {
+        const tStart = ctx.currentTime + 2.2 + i * 0.5;
+        const aOsc = ctx.createOscillator();
+        const aGain = ctx.createGain();
+        aOsc.type = 'square';
+        aOsc.frequency.setValueAtTime(880, tStart);
+        aGain.gain.setValueAtTime(0.15, tStart);
+        aGain.gain.exponentialRampToValueAtTime(0.01, tStart + 0.3);
+        aOsc.connect(aGain);
+        aGain.connect(ctx.destination);
+        aOsc.start(tStart);
+        aOsc.stop(tStart + 0.35);
       }
-
-      // 3. Choque explosivo e impacto (a los 5.5 segundos)
-      const crashTime = ctx.currentTime + 5.5;
-      const bufferSize = ctx.sampleRate * 2.0;
-      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-      const data = buffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i++) {
-        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * 0.35));
-      }
-      const noise = ctx.createBufferSource();
-      noise.buffer = buffer;
-      const crashFilter = ctx.createBiquadFilter();
-      crashFilter.type = 'lowpass';
-      crashFilter.frequency.setValueAtTime(800, crashTime);
-      const crashGain = ctx.createGain();
-      crashGain.gain.setValueAtTime(0.8, crashTime);
-      crashGain.gain.exponentialRampToValueAtTime(0.01, crashTime + 1.8);
-      noise.connect(crashFilter);
-      crashFilter.connect(crashGain);
-      crashGain.connect(ctx.destination);
-      noise.start(crashTime);
-
-      // 4. Pitido sordo (Tinnitus post-impacto a los 5.8 segundos)
-      const tinOsc = ctx.createOscillator();
-      const tinGain = ctx.createGain();
-      tinOsc.type = 'sine';
-      tinOsc.frequency.setValueAtTime(3200, crashTime + 0.3);
-      tinGain.gain.setValueAtTime(0.14, crashTime + 0.3);
-      tinGain.gain.exponentialRampToValueAtTime(0.001, crashTime + 3.0);
-      tinOsc.connect(tinGain);
-      tinGain.connect(ctx.destination);
-      tinOsc.start(crashTime + 0.3);
-      tinOsc.stop(crashTime + 3.2);
     } catch {
-      // Audio fallback
+      // Ignorar fallback
     }
 
     return () => {
@@ -109,98 +72,81 @@ function IntroCutscene({ onComplete }: { onComplete: () => void }) {
     };
   }, []);
 
-  // Reloj de la cinemática
   useEffect(() => {
     const start = performance.now();
     const interval = setInterval(() => {
       const elapsed = (performance.now() - start) / 1000;
       setTime(elapsed);
 
-      if (elapsed < 5.5) {
-        setSpeed(Math.min(285, Math.floor(130 + elapsed * 28)));
-        setDepth(Math.floor(7240 + elapsed * 140));
+      if (elapsed < 4.8) {
+        setSpeed(Math.min(285, Math.floor(130 + elapsed * 32)));
+        setDepth(Math.floor(7240 + elapsed * 160));
       }
 
-      // Transición automática al juego a los 8.2 segundos
-      if (elapsed >= 8.2) {
+      if (elapsed >= 6.8) {
         clearInterval(interval);
-        handleFinish();
+        finish();
       }
     }, 50);
 
     return () => clearInterval(interval);
-  }, [handleFinish]);
+  }, [finish]);
 
-  // Tecla de salto (Cualquier tecla salta la cinemática)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       e.preventDefault();
-      handleFinish();
+      finish();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleFinish]);
+  }, [finish]);
 
-  const isAlarm = time >= 2.8 && time < 5.5;
-  const isImpact = time >= 5.5 && time < 5.9;
-  const isBlackout = time >= 5.9;
+  const isAlarm = time >= 2.2 && time < 4.8;
+  const isImpact = time >= 4.8 && time < 5.2;
+  const isBlackout = time >= 5.2;
 
   return (
     <div
-      onClick={isBlackout ? handleFinish : undefined}
-      className={`fixed inset-0 z-50 bg-black overflow-hidden select-none font-mono2 ${isAlarm ? 'animate-pulse' : ''} ${isBlackout ? 'cursor-pointer' : ''}`}
+      onClick={finish}
+      className={`fixed inset-0 z-50 bg-black overflow-hidden select-none font-mono2 ${isAlarm ? 'animate-pulse' : ''} cursor-pointer`}
     >
-      {/* 1. Luces del túnel a gran velocidad */}
       {!isBlackout && (
         <div className="absolute inset-0 flex items-center justify-center opacity-70 pointer-events-none">
           <div
             className="w-[200vw] h-[200vh] border-[12px] border-cyan-500/20 rounded-full animate-ping"
-            style={{ animationDuration: `${Math.max(0.15, 0.5 - time * 0.06)}s` }}
-          />
-          <div
-            className="absolute w-[120vw] h-[120vh] border-[16px] border-cyan-400/30 rounded-full animate-ping"
-            style={{ animationDuration: `${Math.max(0.12, 0.38 - time * 0.05)}s` }}
+            style={{ animationDuration: `${Math.max(0.15, 0.45 - time * 0.06)}s` }}
           />
         </div>
       )}
 
-      {/* 2. Parabrisas y Cabina del Vehículo */}
       {!isBlackout && (
         <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-neutral-900 via-neutral-900/80 to-transparent border-b border-white/10" />
-          <div className="absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-neutral-900 to-transparent" />
-          <div className="absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-neutral-900 to-transparent" />
-
-          {/* Compuerta blindada de NEXUS acercándose */}
-          {time >= 3.6 && (
+          <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-neutral-900 to-transparent" />
+          {time >= 2.8 && (
             <div
-              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 border-4 border-red-600/70 bg-neutral-950 flex flex-col items-center justify-center transition-all"
+              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 border-4 border-red-600/70 bg-neutral-950 flex flex-col items-center justify-center"
               style={{
-                width: `${Math.min(92, (time - 3.6) * 48)}vw`,
-                height: `${Math.min(82, (time - 3.6) * 42)}vh`,
-                opacity: Math.min(1, (time - 3.6) * 0.9),
+                width: `${Math.min(90, (time - 2.8) * 45)}vw`,
+                height: `${Math.min(80, (time - 2.8) * 40)}vh`,
               }}
             >
               <div className="text-red-500 text-xs sm:text-lg font-bold tracking-[.4em] anim-flick">
                 COMPUERTA BLINDADA B-01 · NEXUS
               </div>
-              <div className="text-amber-500 text-[10px] tracking-widest mt-1">ZONA DE CONTENCIÓN CERRADA</div>
             </div>
           )}
 
-          {/* Tablero digital inferior */}
-          <div className="absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-neutral-950 via-neutral-900 to-transparent p-6 flex flex-col justify-end">
+          <div className="absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-neutral-950 to-transparent p-6 flex flex-col justify-end">
             <div className="max-w-4xl mx-auto w-full flex items-end justify-between border-t border-cyan-500/30 pt-3">
               <div>
-                <div className="text-[11px] text-cyan-300/80 tracking-widest">TRANSPORTE NEXUS-04 · CABINA ACTIVA</div>
+                <div className="text-[11px] text-cyan-300/80 tracking-widest">TRANSPORTE NEXUS-04</div>
                 <div className="text-xs text-slate-400 mt-1">
-                  PROFUNDIDAD: <span className="text-white font-bold tracking-wider">−{depth.toLocaleString()} m</span>
+                  PROFUNDIDAD: <span className="text-white font-bold">−{depth.toLocaleString()} m</span>
                 </div>
               </div>
-
               <div className="text-right">
                 <div className="text-xs text-slate-400">VELOCÍMETRO</div>
-                <div className={`text-2xl sm:text-3xl font-bold tracking-widest ${isAlarm ? 'text-red-500' : 'text-cyan-300'}`}>
+                <div className={`text-2xl sm:text-3xl font-bold ${isAlarm ? 'text-red-500' : 'text-cyan-300'}`}>
                   {speed} <span className="text-sm font-normal">KM/H</span>
                 </div>
               </div>
@@ -209,63 +155,37 @@ function IntroCutscene({ onComplete }: { onComplete: () => void }) {
         </div>
       )}
 
-      {/* 3. Alarma en Rojo */}
       {isAlarm && (
         <div className="absolute inset-x-0 top-1/4 flex flex-col items-center justify-center p-4 pointer-events-none">
           <div className="bg-red-950/80 border-2 border-red-600 px-6 py-4 rounded shadow-[0_0_50px_rgba(255,0,0,0.6)] text-center anim-flick">
-            <div className="text-red-400 text-sm sm:text-base font-bold tracking-[.3em]">
-              ⚠ ¡FALLO CRÍTICO DE FRENOS HIDRÁULICOS! ⚠
-            </div>
-            <div className="text-white text-lg sm:text-2xl font-title tracking-[.2em] mt-1">
-              IMPACTO INMINENTE
-            </div>
+            <div className="text-red-400 text-sm font-bold tracking-[.3em]">⚠ ¡FALLO DE FRENOS! ⚠</div>
+            <div className="text-white text-lg sm:text-2xl font-title tracking-[.2em] mt-1">IMPACTO INMINENTE</div>
           </div>
         </div>
       )}
 
-      {/* 4. Destello de Impacto */}
-      {isImpact && (
-        <div className="absolute inset-0 bg-white z-50 flex items-center justify-center pointer-events-none">
-          <svg className="w-full h-full stroke-black stroke-[3] opacity-80" viewBox="0 0 100 100">
-            <line x1="50" y1="50" x2="10" y2="10" />
-            <line x1="50" y1="50" x2="90" y2="15" />
-            <line x1="50" y1="50" x2="85" y2="85" />
-            <line x1="50" y1="50" x2="15" y2="80" />
-            <line x1="50" y1="50" x2="50" y2="95" />
-          </svg>
-        </div>
-      )}
+      {isImpact && <div className="absolute inset-0 bg-white z-50 pointer-events-none" />}
 
-      {/* 5. Desmayo y despertar */}
       {isBlackout && (
-        <div className="absolute inset-0 bg-black flex flex-col items-center justify-center p-6 text-center">
+        <div className="absolute inset-0 bg-black flex flex-col items-center justify-center p-6 text-center pointer-events-none">
           <div className="text-red-500/80 text-xs sm:text-sm tracking-[.4em] anim-flick mb-3">
             SEÑAL BIOMÉTRICA DÉBIL · SUJETO INCONSCIENTE
           </div>
-          <p className="text-slate-400 text-sm sm:text-base max-w-md leading-relaxed">
-            El impacto destrozó la compuerta. La cabina está inundada de humo frío... Algo se arrastra en la oscuridad.
+          <p className="text-slate-400 text-sm max-w-md">
+            El impacto destrozó la compuerta. La cabina está inundada de humo frío...
           </p>
           <div className="text-cyan-400/80 text-xs tracking-[.3em] mt-6 animate-pulse">
-            DESPERTANDO EN LA INSTALACIÓN...
-          </div>
-          <div className="text-slate-600 text-[10px] tracking-widest mt-3">
-            [ Haz clic o pulsa cualquier tecla para despertar ]
+            [ HAZ CLIC PARA DESPERTAR ]
           </div>
         </div>
       )}
 
-      {/* BOTÓN SALTAR (SKIP) */}
       <button
         onClick={(e) => {
           e.stopPropagation();
-          handleFinish();
+          finish();
         }}
-        onPointerDown={(e) => {
-          e.stopPropagation();
-          handleFinish();
-        }}
-        className="fixed bottom-6 right-6 z-50 px-4 py-2 border border-white/30 bg-black/80 hover:bg-red-950/60 hover:border-red-500 text-xs sm:text-sm tracking-widest text-slate-300 hover:text-white transition-all backdrop-blur-md rounded shadow-lg flex items-center gap-2 cursor-pointer"
-        title="Saltar cinemática [ESC o Espacio]"
+        className="fixed bottom-6 right-6 z-50 px-4 py-2 border border-white/30 bg-black/80 hover:bg-red-950/60 hover:border-red-500 text-xs sm:text-sm tracking-widest text-slate-300 hover:text-white rounded shadow-lg flex items-center gap-2 cursor-pointer"
       >
         <span>SALTAR</span>
         <span className="text-[10px] text-cyan-300/80 hidden sm:inline">[ESC]</span>
@@ -301,7 +221,6 @@ export default function App() {
     return typeof window !== 'undefined' && (window.matchMedia?.('(pointer: coarse)').matches || 'ontouchstart' in window);
   }, [settings.touch]);
 
-  // Inicializar motor
   useEffect(() => {
     if (!canvasRef.current) return;
     const g = Game.get(canvasRef.current);
@@ -313,7 +232,6 @@ export default function App() {
 
   useEffect(() => { if (game) { game.isTouch = touch; } }, [game, touch]);
 
-  // Eventos del juego
   useEffect(() => {
     if (!game) return;
     const record = (result: 'completo' | 'caído', score: number, time: number) => {
@@ -354,22 +272,18 @@ export default function App() {
 
   const startGame = (chapter: number, save: ReturnType<typeof loadSave>) => {
     if (!game) return;
-    try { ensureAudio(); } catch { /* */ }
+    ensureAudio();
     clearOverlays();
-    try {
-      game.isTouch = touch;
-      game.applySettings(settings);
-      game.loadLevel(chapter, save);
-      audio.setDanger(0, true);
-    } catch (err) {
-      console.error('Error starting level:', err);
-    }
+    game.isTouch = touch;
+    game.applySettings(settings);
+    game.loadLevel(chapter, save);
+    audio.setDanger(0, true);
     setScreen('game');
+    game.setModal('none');
     try {
-      game.setModal('none');
       game.requestLock();
     } catch {
-      // Si el navegador bloquea el puntero automático, se activará con el primer clic del jugador
+      // Ignorar
     }
   };
 
@@ -411,7 +325,7 @@ export default function App() {
       {playing && done && !showScores && <Complete info={done.info} rank={done.rank} best={done.best} onReplay={() => startGame(1, null)} onMenu={toMenu} onScores={() => setShowScores(true)} />}
       {playing && showScores && <div className="fixed inset-0 z-50"><Scores onClose={() => setShowScores(false)} /></div>}
 
-      {/* CINEMÁTICA INTRO */}
+      {/* PANTALLA INTRO */}
       {screen === 'intro' && <IntroCutscene onComplete={() => startGame(1, null)} />}
 
       {!playing && screen !== 'intro' && (
