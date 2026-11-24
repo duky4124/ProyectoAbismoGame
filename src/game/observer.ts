@@ -1,213 +1,128 @@
+  private animate(dt: number, time: number, dist: number) {
+    const g = this.g;
+    const spd = this.speedNow;
+    const moving = spd > 0.1;
+    const chasing = this.state === 'chase';
+    const attacking = this.state === 'attack';
 
-import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+    // Ciclo de pasos: más rápido y amplio durante la persecución.
+    const gaitSpeed = chasing ? 2.35 : 1.65;
+    this.phase += dt * Math.max(0.15, spd) * gaitSpeed;
+    const s = Math.sin(this.phase);
+    const c = Math.cos(this.phase);
+    const runBlend = chasing ? 1 : 0;
+    const walkAmp = moving
+      ? Math.min(chasing ? 1.15 : 0.72, 0.22 + spd * (chasing ? 0.19 : 0.14))
+      : 0;
 
-type State = 'patrol' | 'investigate' | 'chase';
+    // Ataque en tres tiempos: preparación, golpe y recuperación.
+    const attackProgress = attacking ? THREE.MathUtils.clamp(this.attackT / 0.8, 0, 1) : 0;
+    const windup = attacking ? smooth01(attackProgress / 0.30) : 0;
+    const strike = attacking
+      ? smooth01((attackProgress - 0.22) / 0.25) * (1 - smooth01((attackProgress - 0.58) / 0.30))
+      : 0;
+    const recover = attacking ? smooth01((attackProgress - 0.58) / 0.42) : 0;
 
-export class Observer {
-  private static readonly SPEED_PATROL = 0.9;
-  private static readonly SPEED_INVESTIGATE = 1.3;
-  private static readonly SPEED_CHASE_BASE = 2.1;
-  private static readonly SPEED_CHASE_MAX = 2.5;
-  private static readonly TARGET_HEIGHT = 2.6;
-  private static readonly DETECT_RANGE = 12;
-  private static readonly LOSE_RANGE = 20;
+    this.legs.forEach((l, i) => {
+      const side = i === 0 ? -1 : 1;
+      const legPhase = s * side;
+      const kneeLift = Math.max(0, c * side);
 
-  readonly wrapper = new THREE.Group();
-  private eyeLight = new THREE.PointLight(0xff2222, 1.5, 10);
+      // Las piernas se mueven en oposición, con rodillas más elevadas al correr.
+      const hipTarget = moving ? legPhase * walkAmp : 0.025 * Math.sin(time * 1.1 + i);
+      const kneeTarget = moving
+        ? 0.06 + kneeLift * walkAmp * (chasing ? 1.05 : 0.72)
+        : 0.035;
 
-  private state: State = 'patrol';
-  private chaseT = 0;
-
-  private frontLimbs: { node: THREE.Object3D; baseX: number; baseZ: number }[] = [];
-  private walkCycle = 0;
-  private gaitAmp = 0;
-  private wrapperBaseY = 0;
-  private stepIdx = 0;
-
-  private spawnPoint = new THREE.Vector2();
-  private patrolRadius = 15;
-  private patrolTarget = new THREE.Vector2();
-  private lastNoise = new THREE.Vector2();
-
-  onStep?: () => void;
-
-  constructor() {
-    this.eyeLight.position.set(0, 2.15, 0.5);
-    this.wrapper.add(this.eyeLight);
-  }
-
-  load(scene: THREE.Scene, spawn: THREE.Vector3) {
-    this.spawnPoint.set(spawn.x, spawn.z);
-    this.wrapper.position.copy(spawn);
-    this.wrapperBaseY = spawn.y;
-    scene.add(this.wrapper);
-    this.pickPatrolTarget();
-
-    new GLTFLoader().load(
-      '/models/monster.glb',
-      (gltf) => {
-        const model = gltf.scene;
-
-        const box = new THREE.Box3().setFromObject(model);
-        const size = new THREE.Vector3(), center = new THREE.Vector3();
-        box.getSize(size);
-        box.getCenter(center);
-        const s = Observer.TARGET_HEIGHT / Math.max(size.y, 0.001);
-        model.scale.setScalar(s);
-        model.position.x -= center.x * s;
-        model.position.z -= center.z * s;
-        model.position.y -= box.min.y * s;
-
-        this.wrapper.add(model);
-        this.setupModel(model);
-      },
-      undefined,
-      (err) => console.error('Error cargando monster.glb:', err)
-    );
-  }
-
-  private setupModel(model: THREE.Object3D) {
-    let left: THREE.Object3D | null = null;
-    let right: THREE.Object3D | null = null;
-
-    // Diagnóstico: lista todos los nodos con nombre (borrable después)
-    model.traverse((o) => {
-      if (o.name) console.log('[Observer v4] nodo:', o.name);
+      l.hip.rotation.x += (hipTarget - l.hip.rotation.x) * Math.min(1, dt * 12);
+      l.knee.rotation.x += (kneeTarget - l.knee.rotation.x) * Math.min(1, dt * 14);
     });
 
-    model.traverse((o) => {
-      const n = o.name.toLowerCase();
-      if (!/(arm|leg|hand|foot|claw|paw|front)/.test(n)) return;
-      const isLeft = n.includes('left') || /(^|_|\.)l($|[0-9_.])/.test(n);
-      const isRight = n.includes('right') || /(^|_|\.)r($|[0-9_.])/.test(n);
-      if (isLeft && !left) left = o;
-      if (isRight && !right) right = o;
+    this.arms.forEach((a, i) => {
+      const side = i === 0 ? -1 : 1;
+      const oppositeLeg = -s * side;
+      const armSwing = moving ? oppositeLeg * walkAmp * (chasing ? 0.85 : 0.62) : Math.sin(time * 0.9 + i) * 0.025;
+
+      // Durante el ataque ambos brazos avanzan; uno lidera el golpe.
+      const lead = i === 0 ? 1 : 0.78;
+      const attackForward = windup * 0.48 + strike * 1.18 * lead - recover * 0.12;
+      const shoulderX = attacking ? attackForward : armSwing + runBlend * 0.18;
+      const shoulderZ = side * (0.06 + (attacking ? 0.24 * windup + 0.12 * strike : 0));
+
+      a.sh.rotation.x += (shoulderX - a.sh.rotation.x) * Math.min(1, dt * (attacking ? 15 : 10));
+      a.sh.rotation.z += (shoulderZ - a.sh.rotation.z) * Math.min(1, dt * 12);
+
+      const elbowTarget = attacking
+        ? -0.12 + windup * 0.72 - strike * 0.92 + recover * 0.18
+        : -0.12 - (moving ? Math.max(0, oppositeLeg) * 0.32 : 0) - runBlend * 0.12;
+      a.el.rotation.x += (elbowTarget - a.el.rotation.x) * Math.min(1, dt * 14);
     });
 
-    this.frontLimbs = [left, right]
-      .filter((n): n is THREE.Object3D => !!n)
-      .map((node) => ({ node, baseX: node.rotation.x, baseZ: node.rotation.z }));
+    const targetLean = attacking
+      ? 0.12 + strike * 0.52
+      : chasing ? 0.38 : this.state === 'investigate' ? 0.14 : moving ? 0.06 : 0;
+    this.lean += (targetLean - this.lean) * Math.min(1, dt * (attacking ? 13 : 5));
+    this.body.rotation.x = -this.lean;
+    const bob = moving ? Math.abs(Math.sin(this.phase * 2)) * (chasing ? 0.075 : 0.045) : Math.sin(time * 1.1) * 0.012;
+    this.body.position.y += (bob - this.body.position.y) * Math.min(1, dt * 12);
 
-    console.log('%c[Observer v4] patas detectadas:',
-      'color:lime',
-      this.frontLimbs.map((l) => l.node.name));
-  }
+    // Respiración y tensión del torso.
+    const breath = 1 + Math.sin(time * (attacking ? 5 : 1.7)) * (attacking ? 0.035 : 0.018);
+    this.chest.scale.x += (breath - this.chest.scale.x) * Math.min(1, dt * 8);
 
-  hearNoise(x: number, z: number) {
-    if (this.state === 'chase') return;
-    this.state = 'investigate';
-    this.lastNoise.set(x, z);
-  }
+    // La cabeza sigue al jugador y acompaña el impulso del ataque.
+    const P = g.P;
+    const headYawWorld = Math.atan2(-(P.x - this.x), -(P.z - this.z));
+    const rel = wrapAngle(headYawWorld - this.yaw);
+    const lookAt = (this.state === 'watch' || chasing || attacking || (this.hasLOS && dist < 22)) && Math.abs(rel) < 1.6;
+    const wantH = lookAt ? rel : Math.sin(time * 0.5) * 0.4;
+    this.head.rotation.y += (wantH - this.head.rotation.y) * Math.min(1, dt * 6);
 
-  get isChasing() {
-    return this.state === 'chase';
-  }
+    const tilt = attacking ? -0.12 - strike * 0.22
+      : this.state === 'watch' ? 0.35 + Math.sin(time * 0.7) * 0.12
+      : this.state === 'investigate' ? 0.15 : 0;
+    this.head.rotation.z += (tilt - this.head.rotation.z) * Math.min(1, dt * (attacking ? 12 : 3));
 
-  update(delta: number, playerPos: THREE.Vector3) {
-    const pos = this.wrapper.position;
-    const dx = playerPos.x - pos.x;
-    const dz = playerPos.z - pos.z;
-    const dist = Math.hypot(dx, dz);
-
-    if (this.state !== 'chase' && dist < Observer.DETECT_RANGE) {
-      this.state = 'chase';
-      this.chaseT = 0;
-    } else if (this.state === 'chase' && dist > Observer.LOSE_RANGE) {
-      this.state = 'investigate';
-      this.lastNoise.set(playerPos.x, playerPos.z);
+    if (this.state === 'patrol' && Math.random() < dt * 0.4) {
+      this.head.rotation.y += (Math.random() - 0.5) * 0.8;
     }
 
-    let speed = 0, tx = 0, tz = 0;
+    const eyeGlow = this.chasing ? 1 : 0.5 + Math.sin(time * 5) * 0.2;
+    this.eyes.forEach((e) => e.scale.setScalar(eyeGlow * 1.2 + 0.2));
 
-    if (this.state === 'chase') {
-      this.chaseT += delta;
-      speed = Math.min(Observer.SPEED_CHASE_MAX,
-        Observer.SPEED_CHASE_BASE + this.chaseT * 0.02);
-      tx = playerPos.x;
-      tz = playerPos.z;
-      // Persiguiendo: SIEMPRE mira al jugador
-      this.faceTowards(dx, dz, delta);
-    } else if (this.state === 'investigate') {
-      speed = Observer.SPEED_INVESTIGATE;
-      tx = this.lastNoise.x;
-      tz = this.lastNoise.y;
-    } else {
-      speed = Observer.SPEED_PATROL;
-      tx = this.patrolTarget.x;
-      tz = this.patrolTarget.y;
-      if (Math.hypot(tx - pos.x, tz - pos.z) < 0.5) this.pickPatrolTarget();
-    }
+    this.group.position.set(this.x, 0, this.z);
+    this.group.rotation.y = this.yaw;
+    this.group.visible = true;
+    this.body.visible = true;
 
-    const mdx = tx - pos.x;
-    const mdz = tz - pos.z;
-    const mdist = Math.hypot(mdx, mdz);
-    const moving = mdist > 0.15 && speed > 0;
-
+    // Sonidos sincronizados con cada pisada.
     if (moving) {
-      pos.x += (mdx / mdist) * speed * delta;
-      pos.z += (mdz / mdist) * speed * delta;
-      if (this.state !== 'chase') this.faceTowards(mdx, mdz, delta);
+      const cyc = Math.floor(this.phase / Math.PI);
+      if (cyc !== this.lastStep) {
+        this.lastStep = cyc;
+        if (dist < 45) {
+          g.audio.heavyStep({ x: this.x, y: 0.1, z: this.z }, Math.min(0.8, 0.25 + spd * 0.1));
+        }
+      }
     }
 
-    this.animateGait(delta, moving);
-  }
-
-  /**
-   * Gira hacia la dirección por el camino más corto.
-   * SI CAMINARA DE ESPALDAS, cambiar esta línea a:
-   *   const targetYaw = Math.atan2(dirX, dirZ) + Math.PI;
-   */
-  private faceTowards(dirX: number, dirZ: number, delta: number) {
-    const len = Math.hypot(dirX, dirZ);
-    if (len < 0.0001) return;
-
-    const targetYaw = Math.atan2(dirX, dirZ);
-    let diff = targetYaw - this.wrapper.rotation.y;
-    diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-    this.wrapper.rotation.y += diff * Math.min(1, delta * 6);
-  }
-
-  /**
-   * Marcha: pierna izquierda pisa, luego la derecha (180° después).
-   * SOLO rotación en X — nunca en Z (eso abría/separaba las piernas).
-   */
-  private animateGait(delta: number, moving: boolean) {
-    if (moving) {
-      this.walkCycle += delta * (this.state === 'chase' ? 8.5 : 6.0);
+    this.clickT -= dt;
+    if (this.clickT < 0 && dist < 50) {
+      this.clickT = 2.5 + Math.random() * 4;
+      g.audio.boneClick({ x: this.x, y: 2.5, z: this.z });
     }
-    const p = this.walkCycle;
-
-    this.gaitAmp = THREE.MathUtils.lerp(
-      this.gaitAmp, moving ? 0.45 : 0, Math.min(1, delta * 5)
-    );
-    const a = this.gaitAmp;
-
-    this.frontLimbs.forEach((limb, i) => {
-      const phase = i === 0 ? p : p + Math.PI;
-      limb.node.rotation.x = limb.baseX + Math.sin(phase) * a;
-      limb.node.rotation.z = limb.baseZ;
-    });
-
-    // Todo el cuerpo sube/baja JUNTO (nada se separa del torso)
-    this.wrapper.position.y =
-      this.wrapperBaseY + Math.abs(Math.sin(p)) * 0.05 * a;
-
-    const idx = Math.floor(p / Math.PI);
-    if (moving && idx !== this.stepIdx) {
-      this.stepIdx = idx;
-      this.onStep?.();
-    } else if (!moving) {
-      this.stepIdx = idx;
-    }
+    const prox = Math.max(0, 1 - dist / 35);
+    g.audio.enemyBedUpdate({ x: this.x, y: 2, z: this.z }, prox * (this.chasing ? 1.4 : 0.8));
   }
+}
 
-  private pickPatrolTarget() {
-    const ang = Math.random() * Math.PI * 2;
-    const r = 4 + Math.random() * Math.max(1, this.patrolRadius - 4);
-    this.patrolTarget.set(
-      this.spawnPoint.x + Math.cos(ang) * r,
-      this.spawnPoint.y + Math.sin(ang) * r
-    );
-  }
+function smooth01(v: number) {
+  const t = THREE.MathUtils.clamp(v, 0, 1);
+  return t * t * (3 - 2 * t);
+}
+
+function wrapAngle(a: number) { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; }
+function turn(cur: number, want: number, maxStep: number) {
+  const d = wrapAngle(want - cur);
+  return cur + Math.max(-maxStep, Math.min(maxStep, d));
 }
