@@ -32,6 +32,8 @@ export class Observer {
   private rightArm: THREE.Object3D | null = null;
   private jaw: THREE.Object3D | null = null;
   private eyeLight: THREE.PointLight | null = null;
+  private bodyMesh: THREE.Mesh | null = null;
+  private bodyBasePositions: Float32Array | null = null;
 
   private phase = 0;
   private lastStep = 0;
@@ -60,7 +62,6 @@ export class Observer {
     this.group.visible = false;
     this.g.level.add(this.group);
 
-    // Cargar el modelo real del monstruo.
     const loader = new GLTFLoader();
 
     loader.load(
@@ -68,7 +69,6 @@ export class Observer {
       (gltf) => {
         const model = gltf.scene;
 
-        // Calcular las dimensiones del modelo.
         const bounds = new THREE.Box3().setFromObject(model);
         const size = new THREE.Vector3();
         const center = new THREE.Vector3();
@@ -76,12 +76,10 @@ export class Observer {
         bounds.getSize(size);
         bounds.getCenter(center);
 
-        // Ajustar el tamaño del monstruo.
         const scale = 3.35 / Math.max(size.y, 0.001);
 
         model.scale.setScalar(scale);
 
-        // Centrar el modelo y apoyarlo en el suelo.
         model.position.set(
           -center.x * scale,
           -bounds.min.y * scale,
@@ -90,14 +88,31 @@ export class Observer {
 
         const root = new THREE.Group();
         root.add(model);
-
-        // Orientación del modelo.
         root.rotation.y = Math.PI;
 
         this.body.add(root);
         this.modelRoot = root;
 
-        // Partes del modelo GLB.
+        // Guardamos la malla original del cuerpo para animar
+        // los dos lados inferiores sin separar el modelo.
+        const bodyMesh = root.getObjectByName(
+          'bady_low_lambert2_0'
+        );
+
+        if (bodyMesh instanceof THREE.Mesh) {
+          this.bodyMesh = bodyMesh;
+
+          const position = bodyMesh.geometry.getAttribute(
+            'position'
+          ) as THREE.BufferAttribute;
+
+          this.bodyBasePositions = new Float32Array(
+            position.array as ArrayLike<number>
+          );
+
+          position.setUsage(THREE.DynamicDrawUsage);
+        }
+
         this.leftArm =
           root.getObjectByName('hand1_low') ??
           root.getObjectByName('hand1_low_lambert2_0') ??
@@ -113,7 +128,6 @@ export class Observer {
           root.getObjectByName('teeth_lambert2_0') ??
           null;
 
-        // Iluminación roja.
         const redLight = new THREE.PointLight(
           0xff2118,
           0.7,
@@ -125,7 +139,6 @@ export class Observer {
 
         this.eyeLight = redLight;
 
-        // Sombras del modelo.
         root.traverse((obj) => {
           if (obj instanceof THREE.Mesh) {
             obj.castShadow = true;
@@ -883,15 +896,28 @@ export class Observer {
     const chasing = this.state === 'chase';
     const attacking = this.state === 'attack';
 
-    // Ciclo de movimiento.
+    // Un ciclo completo representa dos pasos:
+    // primero una pierna y después la otra.
+    const gaitSpeed = chasing ? 3.0 : 1.9;
+
     this.phase +=
       dt *
       Math.max(0.15, spd) *
-      (chasing ? 2.8 : 1.75);
+      gaitSpeed;
 
     const stride = Math.sin(this.phase);
 
-    // Preparación, golpe y recuperación.
+    const leftSwing = Math.max(
+      0,
+      Math.sin(this.phase)
+    );
+
+    const rightSwing = Math.max(
+      0,
+      Math.sin(this.phase + Math.PI)
+    );
+
+    // Animación del ataque.
     const attackProgress = attacking
       ? THREE.MathUtils.clamp(
           this.attackT / 0.8,
@@ -922,6 +948,76 @@ export class Observer {
         )
       : 0;
 
+    // La pisada alterna: nunca levantamos las dos piernas a la vez.
+    const stepAmount = moving
+      ? (chasing ? 1 : 0.72)
+      : 0;
+
+    const leftLift = leftSwing * stepAmount;
+    const rightLift = rightSwing * stepAmount;
+
+    // Deformación suave de la parte inferior de la malla original.
+    // No crea piezas nuevas ni separa el modelo.
+    if (this.bodyMesh && this.bodyBasePositions) {
+      const geometry = this.bodyMesh.geometry;
+
+      const position = geometry.getAttribute(
+        'position'
+      ) as THREE.BufferAttribute;
+
+      const base = this.bodyBasePositions;
+
+      for (let i = 0; i < position.count; i++) {
+        const offset = i * 3;
+
+        const x = base[offset];
+        const y = base[offset + 1];
+        const z = base[offset + 2];
+
+        // Solo afecta la zona baja del cuerpo: las piernas.
+        const legHeight =
+          1 - smooth01((y - 7.8) / 4.2);
+
+        // Diferencia ambos lados usando el eje X.
+        const sideWeight = smooth01(
+          (Math.abs(x) - 0.15) / 1.1
+        );
+
+        const leftSide = x < 0;
+
+        const swing = leftSide
+          ? leftLift
+          : rightLift;
+
+        // Elevación y avance alternados.
+        // Los vértices vuelven a su posición original
+        // antes de aplicar el siguiente fotograma.
+        const lift =
+          swing *
+          2.0 *
+          legHeight *
+          sideWeight;
+
+        const forward =
+          swing *
+          1.45 *
+          legHeight *
+          sideWeight;
+
+        position.setXYZ(
+          i,
+          x,
+          y + lift,
+          z + forward
+        );
+      }
+
+      position.needsUpdate = true;
+
+      geometry.computeVertexNormals();
+      geometry.computeBoundingSphere();
+    }
+
     // Inclinación del cuerpo.
     const targetLean = attacking
       ? 0.16 + strike * 0.62
@@ -930,7 +1026,7 @@ export class Observer {
         : this.state === 'investigate'
           ? 0.12
           : moving
-            ? 0.06
+            ? 0.035
             : 0;
 
     this.lean +=
@@ -946,117 +1042,105 @@ export class Observer {
       Math.sin(
         time * (attacking ? 4.8 : 1.65)
       ) *
-      (attacking ? 0.022 : 0.014);
+      (attacking ? 0.012 : 0.008);
 
-    // Movimiento al caminar y correr.
     const bob = moving
-      ? Math.abs(Math.sin(this.phase * 2)) *
-        (chasing ? 0.095 : 0.045)
-      : Math.sin(time * 1.25) * 0.018;
+      ? Math.abs(stride) *
+        (chasing ? 0.055 : 0.025)
+      : Math.sin(time * 1.25) * 0.012;
 
     this.body.position.y +=
       (bob - this.body.position.y) *
-      Math.min(1, dt * 12);
+      Math.min(1, dt * 10);
 
     this.body.rotation.x +=
       (-this.lean - this.body.rotation.x) *
-      Math.min(1, dt * 8);
+      Math.min(1, dt * 7);
 
     const sway = moving
-      ? Math.sin(this.phase) *
-        (chasing ? 0.055 : 0.025)
-      : Math.sin(time * 0.7) * 0.018;
+      ? stride * (chasing ? 0.035 : 0.018)
+      : Math.sin(time * 0.7) * 0.012;
 
     this.body.rotation.z +=
       (sway - this.body.rotation.z) *
       Math.min(1, dt * 5);
 
-    // Animación del modelo GLB.
     if (this.modelRoot) {
-      const targetScaleY =
-        breathe + (attacking ? strike * 0.025 : 0);
-
       this.modelRoot.scale.y +=
-        (targetScaleY - this.modelRoot.scale.y) *
-        Math.min(1, dt * 7);
+        (breathe - this.modelRoot.scale.y) *
+        Math.min(1, dt * 5);
 
       const lunge = attacking
-        ? strike * 0.38 -
-          windup * 0.08 -
-          recover * 0.04
+        ? strike * 0.28 -
+          windup * 0.06 -
+          recover * 0.03
         : 0;
 
       this.modelRoot.position.z +=
         (lunge - this.modelRoot.position.z) *
-        Math.min(1, dt * 12);
+        Math.min(1, dt * 10);
     }
 
-    // Balanceo de brazos.
-    const leftSwing = moving
-      ? stride * (chasing ? 0.42 : 0.24)
-      : Math.sin(time * 0.9) * 0.035;
-
-    const rightSwing = moving
-      ? -stride * (chasing ? 0.42 : 0.24)
-      : Math.sin(time * 0.9 + 1.4) * 0.035;
-
-    // Brazos durante el ataque.
-    const leftTarget = attacking
-      ? -0.18 -
-        windup * 0.55 +
-        strike * 1.25 -
-        recover * 0.2
-      : leftSwing;
-
-    const rightTarget = attacking
+    // Balanceo moderado de brazos.
+    const leftArmTarget = attacking
       ? -0.12 -
-        windup * 0.42 +
-        strike * 0.95 -
-        recover * 0.16
-      : rightSwing;
+        windup * 0.38 +
+        strike * 0.72 -
+        recover * 0.12
+      : moving
+        ? -stride * (chasing ? 0.20 : 0.12)
+        : Math.sin(time * 0.8) * 0.018;
+
+    const rightArmTarget = attacking
+      ? -0.10 -
+        windup * 0.32 +
+        strike * 0.62 -
+        recover * 0.10
+      : moving
+        ? stride * (chasing ? 0.20 : 0.12)
+        : Math.sin(time * 0.8 + 1) * 0.018;
 
     if (this.leftArm) {
       this.leftArm.rotation.x +=
-        (leftTarget - this.leftArm.rotation.x) *
+        (leftArmTarget - this.leftArm.rotation.x) *
         Math.min(
           1,
-          dt * (attacking ? 15 : 7)
+          dt * (attacking ? 10 : 5)
         );
     }
 
     if (this.rightArm) {
       this.rightArm.rotation.x +=
-        (rightTarget - this.rightArm.rotation.x) *
+        (rightArmTarget - this.rightArm.rotation.x) *
         Math.min(
           1,
-          dt * (attacking ? 15 : 7)
+          dt * (attacking ? 10 : 5)
         );
     }
 
     // Movimiento de mandíbula.
     if (this.jaw) {
       const jawTarget = attacking
-        ? 0.12 + strike * 0.22
-        : 0.025 + Math.sin(time * 1.8) * 0.025;
+        ? 0.10 + strike * 0.16
+        : 0.018 + Math.sin(time * 1.8) * 0.015;
 
       this.jaw.rotation.x +=
         (jawTarget - this.jaw.rotation.x) *
-        Math.min(1, dt * 6);
+        Math.min(1, dt * 5);
     }
 
-    // Luz roja de los ojos.
+    // Luz de los ojos.
     if (this.eyeLight) {
       const glow =
         chasing || attacking
-          ? 1.25
-          : 0.65 + Math.sin(time * 4.5) * 0.22;
+          ? 1.15
+          : 0.58 + Math.sin(time * 4.5) * 0.16;
 
       this.eyeLight.intensity +=
         (glow - this.eyeLight.intensity) *
         Math.min(1, dt * 5);
     }
 
-    // Posición y orientación del enemigo.
     this.group.position.set(
       this.x,
       0,
@@ -1067,7 +1151,7 @@ export class Observer {
     this.group.visible = true;
     this.body.visible = true;
 
-    // Sonidos de pasos.
+    // Sonidos sincronizados con los pasos.
     if (moving) {
       const cyc = Math.floor(
         this.phase / Math.PI
@@ -1089,7 +1173,6 @@ export class Observer {
       }
     }
 
-    // Sonidos ambientales.
     this.clickT -= dt;
 
     if (this.clickT < 0 && dist < 50) {
