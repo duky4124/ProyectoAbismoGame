@@ -100,10 +100,14 @@ export class Observer {
   private loadMonsterModel() {
     const loader = new GLTFLoader();
     loader.load(
-      '/models/monster.glb',
+      '/models/monster_rigged_walk_v4.glb',
       (gltf) => {
         const model = gltf.scene;
         model.name = 'ObserverMonsterModel';
+
+        // El GLB está orientado al eje contrario al que usa la IA (-Z).
+        // Este giro local hace que mire hacia donde apunta yaw y no ataque de espaldas.
+        model.rotation.y = Math.PI;
 
         // Ajusta el tamaño del GLB a la altura que tenía el modelo anterior.
         const bounds = new THREE.Box3().setFromObject(model);
@@ -132,8 +136,19 @@ export class Observer {
         const walk = gltf.animations.find((clip) => clip.name.toLowerCase() === 'walk');
         const idle = gltf.animations.find((clip) => clip.name.toLowerCase() === 'idle');
 
-        if (walk) this.walkAction = this.mixer.clipAction(walk);
-        if (idle) this.idleAction = this.mixer.clipAction(idle);
+        if (walk) {
+          this.walkAction = this.mixer.clipAction(walk);
+          this.walkAction.setLoop(THREE.LoopRepeat, Infinity);
+          this.walkAction.enabled = true;
+        }
+        if (idle) {
+          this.idleAction = this.mixer.clipAction(idle);
+          this.idleAction.setLoop(THREE.LoopRepeat, Infinity);
+          this.idleAction.enabled = true;
+        }
+        if (!walk || !idle) {
+          console.warn('[Observer] Animaciones disponibles:', gltf.animations.map((clip) => clip.name));
+        }
 
         const initialAction = this.idleAction ?? this.walkAction;
         if (initialAction) {
@@ -364,11 +379,15 @@ export class Observer {
     // El GLB utiliza sus propios clips Walk e Idle; la IA sigue controlando
     // posición, orientación, estados y velocidades como antes.
     if (this.mixer) {
-      this.setModelAction(moving ? (this.walkAction ?? this.idleAction) : (this.idleAction ?? this.walkAction));
+      // En persecución se mantiene Walk incluso durante pequeños parones de navegación.
+      const shouldWalk = moving || (this.state === 'chase' && dist > 2.2);
+      this.setModelAction(shouldWalk ? (this.walkAction ?? this.idleAction) : (this.idleAction ?? this.walkAction));
       if (this.currentModelAction) {
-        this.currentModelAction.timeScale = moving && this.state === 'chase' ? 1.25 : 1;
+        this.currentModelAction.enabled = true;
+        this.currentModelAction.setEffectiveWeight(1);
+        this.currentModelAction.timeScale = shouldWalk ? (this.state === 'chase' ? 1.3 : 1.0) : 1.0;
       }
-      this.mixer.update(dt);
+      this.mixer.update(Math.max(0, Math.min(dt, 0.1)));
     }
 
     this.phase += dt * spd * 1.55;
