@@ -56,6 +56,8 @@ export class Observer {
     const flesh = new THREE.MeshStandardMaterial({ color: 0x6a4a48, roughness: 0.5, emissive: 0x120606 });
     const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff2a1a });
     this.group.add(this.body);
+    // El modelo procedural queda oculto: se utiliza únicamente el GLB.
+    this.body.visible = false;
     // pelvis + torso
     const pelvis = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.22, 0.22), skin); pelvis.position.y = 1.5; this.body.add(pelvis);
     this.chest = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.13, 1.0, 8), skin); this.chest.scale.z = 0.62; this.chest.position.y = 2.05; this.chest.castShadow = true; this.body.add(this.chest);
@@ -95,12 +97,12 @@ export class Observer {
 
   /**
    * Carga el modelo riggeado desde public/models/monster.glb.
-   * Si falla la carga, se conserva el monstruo procedural como respaldo.
+   * No utiliza el monstruo procedural como respaldo.
    */
   private loadMonsterModel() {
     const loader = new GLTFLoader();
     loader.load(
-      '/models/monster_rigged_walk_v4.glb',
+      '/models/monster.glb',
       (gltf) => {
         const model = gltf.scene;
         model.name = 'ObserverMonsterModel';
@@ -130,8 +132,6 @@ export class Observer {
         });
 
         this.group.add(model);
-        this.body.visible = false;
-
         this.mixer = new THREE.AnimationMixer(model);
         const walk = gltf.animations.find((clip) => clip.name.toLowerCase() === 'walk');
         const idle = gltf.animations.find((clip) => clip.name.toLowerCase() === 'idle');
@@ -159,7 +159,7 @@ export class Observer {
       },
       undefined,
       (error) => {
-        console.error('[Observer] No se pudo cargar /models/monster.glb. Se mantiene el modelo de respaldo.', error);
+        console.error('[Observer] No se pudo cargar /models/monster.glb. Comprueba que esté en public/models/monster.glb.', error);
       }
     );
   }
